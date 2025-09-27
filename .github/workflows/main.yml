@@ -1,0 +1,14 @@
+name: Deploy to Self Hoster Runner
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: [self-hosted, linux, X64, upfolio-backend]
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: run deployment Script
+      run: cd /home/ubuntu/upfolio/scripts/ && bash deploy.sh
