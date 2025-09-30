@@ -207,8 +207,8 @@ class MasterService {
             },
             monthlyOverview: [],
             statusDistribution: [],
-            recentActivity: [],
-            recentResource: [],
+            activityFeed: [],
+            modulesFromActivityRecords: [],
           },
         };
       }
@@ -633,8 +633,8 @@ class MasterService {
           },
           monthlyOverview,
           statusDistribution: processedStatusDistribution,
-          recentActivity,
-          recentResource,
+          activityFeed: recentActivity,
+          modulesFromActivityRecords: recentResource,
         },
       };
     } catch (error) {

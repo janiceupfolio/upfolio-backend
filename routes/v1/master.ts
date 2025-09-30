@@ -20,7 +20,7 @@ router.route("/methods").get(authenticateUser, MasterController.getAllMethods);
 router.route("/signed-off").put(authenticateUser, MasterController.signedOff);
 
 // Dashboard route
-router.route("/dashboard").get(authenticateUser, MasterController.getDashboard);
+router.route("/dashboard/admin").get(authenticateUser, MasterController.getDashboard);
 
 // Dashboard route Assessor
 router.route("/dashboard/assessor").get(authenticateUser, MasterController.getDashboardAssessor);
