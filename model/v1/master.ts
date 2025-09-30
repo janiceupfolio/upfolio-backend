@@ -1344,11 +1344,26 @@ class MasterService {
         ],
       });
 
+      moduleAccessConditions.push({
+        [Op.and]: [
+          {
+            id: {
+              [Op.in]: sequelize.literal(`(
+                SELECT DISTINCT module_records_id
+                FROM tbl_module_records_learner
+                WHERE learner_id = ${learnerId}
+              )`)
+            }
+          }
+        ]
+      })
+
       const activityRecordsModules = await ModuleRecords.findAll({
         where: {
           deletedAt: null,
           center_id: centerId,
           [Op.or]: moduleAccessConditions,
+          created_by: learnerId
         },
         include: {
           model: Image,
