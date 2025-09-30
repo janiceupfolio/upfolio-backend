@@ -357,7 +357,7 @@ class ModuleRecordsService {
       };
 
       // Center Admin (Role 7) can see all module records
-      if (userData.role !== Roles.ADMIN) {
+      if (userData.role !== Roles.ADMIN) {  
         // For non-admin users, apply center filtering
         if (data.center_id) {
           whereClause.center_id = data.center_id;

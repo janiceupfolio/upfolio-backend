@@ -22,4 +22,7 @@ router.route("/signed-off").put(authenticateUser, MasterController.signedOff);
 // Dashboard route
 router.route("/dashboard").get(authenticateUser, MasterController.getDashboard);
 
+// Dashboard route Assessor
+router.route("/dashboard/assessor").get(authenticateUser, MasterController.getDashboardAssessor);
+
 export default router;
