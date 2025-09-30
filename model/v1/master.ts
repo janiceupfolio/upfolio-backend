@@ -1214,6 +1214,277 @@ class MasterService {
       };
     }
   }
+
+  static async getDashboardLearner(
+    data: any,
+    userData: userAuthenticationData
+  ): Promise<any> {
+    try {
+      if (userData.role !== Roles.LEARNER) {
+        return {
+          status: STATUS_CODES.SUCCESS,
+          message: STATUS_MESSAGE.DASHBOARD.DASHBOARD_DATA,
+          data: {
+            overview: {
+              numberOfQualifications: { value: 0, change: 0, note: "No qualifications" },
+              progressOfQualifications: { value: 0, change: 0, note: "No progress" },
+              numberOfAssessments: { value: 0, change: 0, note: "No assessments" },
+              numberOfSubmissions: { value: 0, change: 0, note: "No submissions" },
+              numberOfIQAActions: { value: 0, change: 0, note: "No IQA actions" },
+              numberOfQualificationsSignedOff: { value: 0, change: 0, note: "No qualifications signed off" },
+              numberOfCompletedUnits: { value: 0, change: 0, note: "No completed units" },
+            },
+            monthlyOverview: [],
+            statusDistribution: [],
+            activityFeed: [],
+            activityRecordsModules: [],
+          },
+        };
+      }
+
+      const currentDate = new Date();
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const startOfLastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+      const endOfLastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0);
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(currentDate.getMonth() - 6);
+
+      const learnerId = userData.id;
+      const centerId = userData.center_id;
+
+      // Get qualification data
+      const [totalQualifications, newQualificationsThisMonth, signedOffQualifications] = await Promise.all([
+        UserQualification.count({
+          where: { user_id: learnerId, deletedAt: null },
+        }),
+        UserQualification.count({
+          where: { user_id: learnerId, deletedAt: null, createdAt: { [Op.gte]: startOfMonth } },
+        }),
+        UserQualification.count({
+          where: { user_id: learnerId, is_signed_off: true, deletedAt: null },
+        }),
+      ]);
+
+      // Calculate qualification progress
+      const qualificationProgress = totalQualifications > 0 ? Math.round((signedOffQualifications / totalQualifications) * 100) : 0;
+
+      // Get assessment data
+      const [totalAssessments, totalSubmissions, iqaActions, completedUnits] = await Promise.all([
+        Assessment.count({
+          where: { center_id: centerId, deletedAt: null },
+          include: [{ model: User, as: "learners", where: { id: learnerId }, through: { attributes: [] } }],
+        }),
+        Assessment.count({
+          where: { center_id: centerId, assessment_status: { [Op.in]: [2, 3, 4, 5, 6] }, deletedAt: null },
+          include: [{ model: User, as: "learners", where: { id: learnerId }, through: { attributes: [] } }],
+        }),
+        Assessment.count({
+          where: { center_id: centerId, assessment_status: 6, deletedAt: null },
+          include: [{ model: User, as: "learners", where: { id: learnerId }, through: { attributes: [] } }],
+        }),
+        Assessment.count({
+          where: { center_id: centerId, assessment_status: 4, deletedAt: null },
+          include: [{ model: User, as: "learners", where: { id: learnerId }, through: { attributes: [] } }],
+        }),
+      ]);
+
+      // Get activity data
+      const recentActivity = await Activity.findAll({
+        where: { center_id: centerId, user_id: learnerId },
+        include: { model: User, as: "user", attributes: ["id", "name", "surname", "email"] },
+        order: [["createdAt", "DESC"]],
+        limit: 10,
+      });
+
+      // Get activity records modules
+      const userQualifications = await UserQualification.findAll({
+        where: { user_id: learnerId, status: 1, deletedAt: null },
+        attributes: ["qualification_id"],
+      });
+
+      const qualificationIds = userQualifications.map((uq) => uq.qualification_id);
+      const moduleAccessConditions = [];
+
+      // Progress Review and Library modules are visible to everyone
+      moduleAccessConditions.push({
+        module_type: { [Op.in]: [ModuleTypes.PROGRESS_REVIEW, ModuleTypes.LIBRARY] },
+      });
+
+      // Qualification-type modules
+      if (qualificationIds.length > 0) {
+        moduleAccessConditions.push({
+          [Op.and]: [
+            { is_learner_or_qualification: 2 },
+            {
+              id: {
+                [Op.in]: sequelize.literal(`(
+                  SELECT DISTINCT module_records_id 
+                  FROM tbl_module_records_qualification 
+                  WHERE qualification_id IN (${qualificationIds.join(",")})
+                )`),
+              },
+            },
+          ],
+        });
+      }
+
+      // Learner-type modules
+      moduleAccessConditions.push({
+        [Op.and]: [
+          { is_learner_or_qualification: 1 },
+          {
+            id: {
+              [Op.in]: sequelize.literal(`(
+                SELECT DISTINCT module_records_id 
+                FROM tbl_module_records_learner 
+                WHERE learner_id = ${learnerId}
+              )`),
+            },
+          },
+        ],
+      });
+
+      const activityRecordsModules = await ModuleRecords.findAll({
+        where: {
+          deletedAt: null,
+          center_id: centerId,
+          [Op.or]: moduleAccessConditions,
+        },
+        include: {
+          model: Image,
+          as: "images_module_records",
+          attributes: ["id", "image", "image_type", "image_name", "image_size"],
+        },
+        order: [["createdAt", "DESC"]],
+        limit: 10,
+      });
+
+      // Get monthly data
+      const monthlyData = await sequelize.query(
+        `
+        SELECT DATE_FORMAT(a.createdAt, '%Y-%m') as month,
+               COUNT(a.id) as submissions,
+               SUM(CASE WHEN a.assessment_status = 4 THEN 1 ELSE 0 END) as completions,
+               SUM(CASE WHEN a.assessment_status = 6 THEN 1 ELSE 0 END) as iqa_approved
+        FROM tbl_assessment a
+        INNER JOIN tbl_assessment_learner al ON a.id = al.assessment_id
+        WHERE a.center_id = :centerId
+          AND al.learner_id = :learnerId
+          AND a.createdAt >= :sixMonthsAgo
+          AND a.deletedAt IS NULL
+        GROUP BY DATE_FORMAT(a.createdAt, '%Y-%m')
+        ORDER BY month ASC
+      `,
+        {
+          replacements: { centerId, learnerId, sixMonthsAgo },
+          type: sequelize.QueryTypes.SELECT,
+        }
+      );
+
+      // Get status distribution
+      const statusDistribution = await sequelize.query(
+        `
+        SELECT a.assessment_status, COUNT(a.id) as count
+        FROM tbl_assessment a
+        INNER JOIN tbl_assessment_learner al ON a.id = al.assessment_id
+        WHERE a.center_id = :centerId
+          AND al.learner_id = :learnerId
+          AND a.deletedAt IS NULL
+        GROUP BY a.assessment_status
+      `,
+        {
+          replacements: { centerId, learnerId },
+          type: sequelize.QueryTypes.SELECT,
+        }
+      );
+
+      // Prepare monthly overview
+      const monthlyOverview: any[] = [];
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date();
+        date.setMonth(date.getMonth() - i);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        const monthData = (monthlyData as any[]).find((m) => m.month === monthKey) as any;
+        monthlyOverview.push({
+          month: monthNames[date.getMonth()],
+          submissions: monthData ? parseInt(monthData.submissions) : 0,
+          completions: monthData ? parseInt(monthData.completions) : 0,
+          iqaApproved: monthData ? parseInt(monthData.iqa_approved) : 0,
+        });
+      }
+
+      // Status distribution mapping
+      const statusMap = {
+        1: { label: "Created", color: "#3B82F6" },
+        2: { label: "Evidence Submitted", color: "#3B82F6" },
+        3: { label: "Under Review", color: "#F59E0B" },
+        4: { label: "Completed", color: "#10B981" },
+        5: { label: "With IQA", color: "#8B5CF6" },
+        6: { label: "IQA Approved", color: "#10B981" },
+      };
+
+      const processedStatusDistribution = (statusDistribution as any[]).map((item) => ({
+        status: statusMap[item.assessment_status]?.label || "Unknown",
+        count: parseInt(item.count),
+        color: statusMap[item.assessment_status]?.color || "#6B7280",
+      }));
+
+      return {
+        status: STATUS_CODES.SUCCESS,
+        message: STATUS_MESSAGE.DASHBOARD.DASHBOARD_DATA,
+        data: {
+          overview: {
+            numberOfQualifications: {
+              value: totalQualifications,
+              change: newQualificationsThisMonth,
+              note: `${newQualificationsThisMonth} added recently`,
+            },
+            progressOfQualifications: {
+              value: qualificationProgress,
+              change: 0,
+              note: `${qualificationProgress}% completion rate`,
+            },
+            numberOfAssessments: {
+              value: totalAssessments,
+              change: 0,
+              note: "Total assessments assigned",
+            },
+            numberOfSubmissions: {
+              value: totalSubmissions,
+              change: 0,
+              note: "Total submissions made",
+            },
+            numberOfIQAActions: {
+              value: iqaActions,
+              change: 0,
+              note: "IQA approved assessments",
+            },
+            numberOfQualificationsSignedOff: {
+              value: signedOffQualifications,
+              change: 0,
+              note: "Qualifications completed",
+            },
+            numberOfCompletedUnits: {
+              value: completedUnits,
+              change: 0,
+              note: "Units completed for graph data",
+            },
+          },
+          monthlyOverview,
+          statusDistribution: processedStatusDistribution,
+          activityFeed: recentActivity,
+          activityRecordsModules,
+        },
+      };
+    } catch (error) {
+      console.log(error);
+      return {
+        status: STATUS_CODES.SERVER_ERROR,
+        message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
 }
 
 export default MasterService;

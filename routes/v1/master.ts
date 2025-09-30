@@ -25,4 +25,7 @@ router.route("/dashboard").get(authenticateUser, MasterController.getDashboard);
 // Dashboard route Assessor
 router.route("/dashboard/assessor").get(authenticateUser, MasterController.getDashboardAssessor);
 
+// Dashboard route Learner
+router.route("/dashboard/learner").get(authenticateUser, MasterController.getDashboardLearner);
+
 export default router;

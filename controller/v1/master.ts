@@ -126,6 +126,27 @@ class MasterController {
       res.handler.serverError(error);
     }
   }
+
+  // Get Dashboard Learner method
+  static async getDashboardLearner(req: Request, res: Response): Promise<void> {
+    try {
+      let data = req.query;
+      let userData = req.headers["user_info"] as userAuthenticationData;
+      let request = await MasterService.getDashboardLearner(data, userData);
+      if (request.status !== STATUS_CODES.SUCCESS) {
+        res.handler.errorResponse(request.status, request.message);
+        return;
+      }
+      res.handler.successResponse(
+        request.status,
+        request.data,
+        request.message
+      );
+    } catch (error) {
+      error = "server error";
+      res.handler.serverError(error);
+    }
+  }
 }
 
 export default MasterController;
