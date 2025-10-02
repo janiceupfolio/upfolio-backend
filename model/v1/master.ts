@@ -20,6 +20,10 @@ import ModuleRecords from "../../database/schema/modules_records";
 import Activity from "../../database/schema/activity";
 import Image from "../../database/schema/images";
 import UserLearner from "../../database/schema/user_learner";
+import AssessmentMarks from "../../database/schema/assessment_marks";
+import OutcomeSubpoints from "../../database/schema/outcome_subpoints";
+import SubOutcomes from "../../database/schema/sub_outcomes";
+import Units from "../../database/schema/units";
 const { sequelize } = require("../../configs/database");
 
 class MasterService {
@@ -256,9 +260,9 @@ class MasterService {
       const assessmentWhereCondition =
         validQualificationIds.length > 0
           ? {
-              ...centerWhereCondition,
-              qualification_id: { [Op.in]: validQualificationIds },
-            }
+            ...centerWhereCondition,
+            qualification_id: { [Op.in]: validQualificationIds },
+          }
           : { ...centerWhereCondition, qualification_id: { [Op.in]: [] } };
 
       // ------------------ Batch 1 (Counts) ------------------
@@ -413,10 +417,9 @@ class MasterService {
         FROM tbl_assessment
         WHERE center_id = :centerId
           AND createdAt >= :sixMonthsAgo
-          ${
-            validQualificationIds.length > 0
-              ? "AND qualification_id IN(:qualificationIds)"
-              : ""
+          ${validQualificationIds.length > 0
+            ? "AND qualification_id IN(:qualificationIds)"
+            : ""
           }
         GROUP BY DATE_FORMAT(createdAt, '%Y-%m')
         ORDER BY month ASC
@@ -437,10 +440,9 @@ class MasterService {
         SELECT assessment_status, COUNT(id) as count
         FROM tbl_assessment
         WHERE center_id = :centerId
-          ${
-            validQualificationIds.length > 0
-              ? "AND qualification_id IN(:qualificationIds)"
-              : ""
+          ${validQualificationIds.length > 0
+            ? "AND qualification_id IN(:qualificationIds)"
+            : ""
           }
         GROUP BY assessment_status
       `,
@@ -493,14 +495,14 @@ class MasterService {
       const assessorChange =
         assessorsThisWeek > 0
           ? (assessorsThisWeek / (activeAssessors > 0 ? activeAssessors : 1)) *
-            100
+          100
           : 0;
 
       const assessmentChange =
         assessmentsThisMonth > 0
           ? (assessmentsThisMonth /
-              (totalAssessments > 0 ? totalAssessments : 1)) *
-            100
+            (totalAssessments > 0 ? totalAssessments : 1)) *
+          100
           : 0;
 
       // const successRate = totalAssessments > 0 ? (completedAssessments / totalAssessments) * 100 : 0;
@@ -1445,6 +1447,71 @@ class MasterService {
         color: statusMap[item.assessment_status]?.color || "#6B7280",
       }));
 
+      // ==== NEW PART: QUALIFICATION + UNITS + PROGRESS ====
+      const qualificationUnitProgress = await sequelize.query(
+        `
+      SELECT 
+          uq.qualification_id,
+          q.name AS qualification_name,
+          u.id AS unit_id,
+          u.unit_title,
+          COUNT(DISTINCT os.id) AS total_subpoints,
+          SUM(CASE WHEN am.marks IS NOT NULL AND am.marks >= 1 THEN 1 ELSE 0 END) AS achieved_subpoints,
+          ROUND(
+              (SUM(CASE WHEN am.marks IS NOT NULL AND am.marks >= 1 THEN 1 ELSE 0 END) / COUNT(DISTINCT os.id)) * 100, 
+              2
+          ) AS progress_percent
+      FROM tbl_user_qualification uq
+      INNER JOIN tbl_qualifications q ON q.id = uq.qualification_id
+      INNER JOIN tbl_units u ON u.qualification_id = q.id
+      INNER JOIN tbl_sub_outcomes so ON so.unit_id = u.id
+      INNER JOIN tbl_outcome_subpoints os ON os.outcome_id = so.id
+      LEFT JOIN (
+          SELECT am1.*
+          FROM tbl_assessment_marks am1
+          INNER JOIN (
+              SELECT learner_id, qualification_id, unit_id, subpoint_id, MAX(marks) AS max_marks
+              FROM tbl_assessment_marks
+              GROUP BY learner_id, qualification_id, unit_id, subpoint_id
+          ) grouped 
+            ON am1.learner_id = grouped.learner_id
+           AND am1.qualification_id = grouped.qualification_id
+           AND am1.unit_id = grouped.unit_id
+           AND am1.subpoint_id = grouped.subpoint_id
+           AND am1.marks = grouped.max_marks
+      ) am ON am.unit_id = u.id AND am.subpoint_id = os.id 
+         AND am.learner_id = uq.user_id
+         AND am.qualification_id = uq.qualification_id
+      WHERE uq.user_id = :learnerId
+        AND uq.is_signed_off = FALSE
+      GROUP BY uq.qualification_id, q.name, u.id
+      ORDER BY q.id, u.unit_number
+      `,
+        {
+          replacements: { learnerId },
+          type: sequelize.QueryTypes.SELECT,
+        }
+      );
+
+      // Group into nested JSON
+      const nestedQualifications: any[] = [];
+      qualificationUnitProgress.forEach((row: any) => {
+        let q = nestedQualifications.find((x) => x.qualification_id === row.qualification_id);
+        if (!q) {
+          q = {
+            qualification_id: row.qualification_id,
+            qualification_name: row.qualification_name,
+            units: [],
+          };
+          nestedQualifications.push(q);
+        }
+        q.units.push({
+          unit_id: row.unit_id,
+          unit_title: row.unit_title,
+          progress_percent: row.progress_percent || 0,
+        });
+      });
+
       return {
         status: STATUS_CODES.SUCCESS,
         message: STATUS_MESSAGE.DASHBOARD.DASHBOARD_DATA,
@@ -1490,6 +1557,7 @@ class MasterService {
           statusDistribution: processedStatusDistribution,
           activityFeed: recentActivity,
           activityRecordsModules,
+          qualificationProgressData: nestedQualifications
         },
       };
     } catch (error) {
