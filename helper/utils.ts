@@ -229,10 +229,15 @@ export const generateSecurePassword = async (): Promise<string> => {
   }
 
   // Shuffle array to avoid predictable order and return as string
-  // return passwordChars
-  //   .sort(() => Math.random() - 0.5)
-  //   .join('');
-  return "Admin@123"; // For testing purposes, returning a fixed password
+  let password = process.env.NODE_ENV == "production" ? passwordChars
+    .sort(() => Math.random() - 0.5)
+    .join('') : "Admin@123"; // For testing purposes, returning a fixed password
+
+  if (!password) {
+    password = "Admin@123"
+  }
+  
+  return password
 };
 
 // Cache Common function
@@ -509,35 +514,35 @@ export const retryDatabaseOperation = async <T>(
   baseDelay: number = 1000
 ): Promise<T> => {
   let lastError: Error;
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await operation();
     } catch (error: any) {
       lastError = error;
-      
+
       // Check if it's a lock timeout error
-      if (error.code === 'ER_LOCK_WAIT_TIMEOUT' || 
-          error.name === 'SequelizeDatabaseError' && 
-          error.parent?.code === 'ER_LOCK_WAIT_TIMEOUT') {
-        
+      if (error.code === 'ER_LOCK_WAIT_TIMEOUT' ||
+        error.name === 'SequelizeDatabaseError' &&
+        error.parent?.code === 'ER_LOCK_WAIT_TIMEOUT') {
+
         if (attempt === maxRetries) {
           console.error(`Database operation failed after ${maxRetries + 1} attempts:`, error);
           throw error;
         }
-        
+
         // Exponential backoff with jitter
         const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
         console.log(`Lock timeout detected, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
-      
+
       // For other errors, don't retry
       throw error;
     }
   }
-  
+
   throw lastError!;
 };
 

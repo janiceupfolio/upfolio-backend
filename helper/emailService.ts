@@ -100,7 +100,7 @@ export class EmailService {
       name,
       email,
       password,
-      loginUrl: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login"
+      login_url: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login"
     };
 
     return this.sendTemplateEmail(
@@ -124,7 +124,7 @@ export class EmailService {
       name,
       email,
       password,
-      loginUrl: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login"
+      login_url: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login"
     };
 
     return this.sendTemplateEmail(
@@ -149,7 +149,7 @@ export class EmailService {
       name,
       email,
       password,
-      loginUrl: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login",
+      login_url: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login",
       center_name: center
     }
     return this.sendTemplateEmail(
@@ -173,7 +173,7 @@ export class EmailService {
       name,
       email,
       password,
-      loginUrl: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login",
+      login_url: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login",
     }
     return this.sendTemplateEmail(
       email,
@@ -196,7 +196,7 @@ export class EmailService {
       name,
       email,
       password,
-      loginUrl: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login",
+      login_url: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login",
     }
     return this.sendTemplateEmail(
       email,
