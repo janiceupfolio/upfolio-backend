@@ -1222,7 +1222,7 @@ class MasterService {
     userData: userAuthenticationData
   ): Promise<any> {
     try {
-      if (userData.role !== Roles.LEARNER) {
+      if (userData.role !== Roles.LEARNER || !data.qualification_id) {
         return {
           status: STATUS_CODES.SUCCESS,
           message: STATUS_MESSAGE.DASHBOARD.DASHBOARD_DATA,
@@ -1253,17 +1253,23 @@ class MasterService {
 
       const learnerId = userData.id;
       const centerId = userData.center_id;
+      const qualificationId = data.qualification_id; // Extract qualification_id from request data
 
       // Get qualification data
+      const qualificationWhereClause = { user_id: learnerId, deletedAt: null };
+      if (qualificationId) {
+        qualificationWhereClause['qualification_id'] = qualificationId;
+      }
+
       const [totalQualifications, newQualificationsThisMonth, signedOffQualifications] = await Promise.all([
         UserQualification.count({
-          where: { user_id: learnerId, deletedAt: null },
+          where: qualificationWhereClause,
         }),
         UserQualification.count({
-          where: { user_id: learnerId, deletedAt: null, createdAt: { [Op.gte]: startOfMonth } },
+          where: { ...qualificationWhereClause, createdAt: { [Op.gte]: startOfMonth } },
         }),
         UserQualification.count({
-          where: { user_id: learnerId, is_signed_off: true, deletedAt: null },
+          where: { ...qualificationWhereClause, is_signed_off: true },
         }),
       ]);
 
@@ -1271,21 +1277,26 @@ class MasterService {
       const qualificationProgress = totalQualifications > 0 ? Math.round((signedOffQualifications / totalQualifications) * 100) : 0;
 
       // Get assessment data
+      const assessmentWhereClause = { center_id: centerId, deletedAt: null };
+      if (qualificationId) {
+        assessmentWhereClause['qualification_id'] = qualificationId;
+      }
+
       const [totalAssessments, totalSubmissions, iqaActions, completedUnits] = await Promise.all([
         Assessment.count({
-          where: { center_id: centerId, deletedAt: null },
+          where: assessmentWhereClause,
           include: [{ model: User, as: "learners", where: { id: learnerId }, through: { attributes: [] } }],
         }),
         Assessment.count({
-          where: { center_id: centerId, assessment_status: { [Op.in]: [2, 3, 4, 5, 6] }, deletedAt: null },
+          where: { ...assessmentWhereClause, assessment_status: { [Op.in]: [2, 3, 4, 5, 6] } },
           include: [{ model: User, as: "learners", where: { id: learnerId }, through: { attributes: [] } }],
         }),
         Assessment.count({
-          where: { center_id: centerId, assessment_status: 6, deletedAt: null },
+          where: { ...assessmentWhereClause, assessment_status: 6 },
           include: [{ model: User, as: "learners", where: { id: learnerId }, through: { attributes: [] } }],
         }),
         Assessment.count({
-          where: { center_id: centerId, assessment_status: 4, deletedAt: null },
+          where: { ...assessmentWhereClause, assessment_status: 4 },
           include: [{ model: User, as: "learners", where: { id: learnerId }, through: { attributes: [] } }],
         }),
       ]);
@@ -1299,8 +1310,13 @@ class MasterService {
       });
 
       // Get activity records modules
+      const userQualificationsWhereClause = { user_id: learnerId, status: 1, deletedAt: null };
+      if (qualificationId) {
+        userQualificationsWhereClause['qualification_id'] = qualificationId;
+      }
+
       const userQualifications = await UserQualification.findAll({
-        where: { user_id: learnerId, status: 1, deletedAt: null },
+        where: userQualificationsWhereClause,
         attributes: ["qualification_id"],
       });
 
@@ -1377,8 +1393,7 @@ class MasterService {
       });
 
       // Get monthly data
-      const monthlyData = await sequelize.query(
-        `
+      let monthlyQuery = `
         SELECT DATE_FORMAT(a.createdAt, '%Y-%m') as month,
                COUNT(a.id) as submissions,
                SUM(CASE WHEN a.assessment_status = 4 THEN 1 ELSE 0 END) as completions,
@@ -1389,31 +1404,46 @@ class MasterService {
           AND al.learner_id = :learnerId
           AND a.createdAt >= :sixMonthsAgo
           AND a.deletedAt IS NULL
+      `;
+      
+      const replacements = { centerId, learnerId, sixMonthsAgo };
+      if (qualificationId) {
+        monthlyQuery += ` AND a.qualification_id = :qualificationId`;
+        replacements['qualificationId'] = qualificationId;
+      }
+      
+      monthlyQuery += `
         GROUP BY DATE_FORMAT(a.createdAt, '%Y-%m')
         ORDER BY month ASC
-      `,
-        {
-          replacements: { centerId, learnerId, sixMonthsAgo },
-          type: sequelize.QueryTypes.SELECT,
-        }
-      );
+      `;
+
+      const monthlyData = await sequelize.query(monthlyQuery, {
+        replacements,
+        type: sequelize.QueryTypes.SELECT,
+      });
 
       // Get status distribution
-      const statusDistribution = await sequelize.query(
-        `
+      let statusQuery = `
         SELECT a.assessment_status, COUNT(a.id) as count
         FROM tbl_assessment a
         INNER JOIN tbl_assessment_learner al ON a.id = al.assessment_id
         WHERE a.center_id = :centerId
           AND al.learner_id = :learnerId
           AND a.deletedAt IS NULL
-        GROUP BY a.assessment_status
-      `,
-        {
-          replacements: { centerId, learnerId },
-          type: sequelize.QueryTypes.SELECT,
-        }
-      );
+      `;
+      
+      const statusReplacements = { centerId, learnerId };
+      if (qualificationId) {
+        statusQuery += ` AND a.qualification_id = :qualificationId`;
+        statusReplacements['qualificationId'] = qualificationId;
+      }
+      
+      statusQuery += ` GROUP BY a.assessment_status`;
+
+      const statusDistribution = await sequelize.query(statusQuery, {
+        replacements: statusReplacements,
+        type: sequelize.QueryTypes.SELECT,
+      });
 
       // Prepare monthly overview
       const monthlyOverview: any[] = [];
@@ -1448,8 +1478,7 @@ class MasterService {
       }));
 
       // ==== NEW PART: QUALIFICATION + UNITS + PROGRESS ====
-      const qualificationUnitProgress = await sequelize.query(
-        `
+      let qualificationProgressQuery = `
       SELECT 
           uq.qualification_id,
           q.name AS qualification_name,
@@ -1484,28 +1513,33 @@ class MasterService {
          AND am.qualification_id = uq.qualification_id
       WHERE uq.user_id = :learnerId
         AND uq.is_signed_off = FALSE
+      `;
+      
+      const qualificationProgressReplacements = { learnerId };
+      if (qualificationId) {
+        qualificationProgressQuery += ` AND uq.qualification_id = :qualificationId`;
+        qualificationProgressReplacements['qualificationId'] = qualificationId;
+      }
+      
+      qualificationProgressQuery += `
       GROUP BY uq.qualification_id, q.name, u.id
       ORDER BY q.id, u.unit_number
-      `,
-        {
-          replacements: { learnerId },
-          type: sequelize.QueryTypes.SELECT,
-        }
-      );
+      `;
+
+      const qualificationUnitProgress = await sequelize.query(qualificationProgressQuery, {
+        replacements: qualificationProgressReplacements,
+        type: sequelize.QueryTypes.SELECT,
+      });
 
       // Group into nested JSON
-      const nestedQualifications: any[] = [];
+      const nestedQualifications: any = {};
       qualificationUnitProgress.forEach((row: any) => {
-        let q = nestedQualifications.find((x) => x.qualification_id === row.qualification_id);
-        if (!q) {
-          q = {
-            qualification_id: row.qualification_id,
-            qualification_name: row.qualification_name,
-            units: [],
-          };
-          nestedQualifications.push(q);
+        if (!nestedQualifications.qualification_id) {
+          nestedQualifications.qualification_id = row.qualification_id;
+          nestedQualifications.qualification_name = row.qualification_name;
+          nestedQualifications.units = [];
         }
-        q.units.push({
+        nestedQualifications.units.push({
           unit_id: row.unit_id,
           unit_title: row.unit_title,
           progress_percent: row.progress_percent || 0,
