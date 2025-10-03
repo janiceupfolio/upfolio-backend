@@ -150,7 +150,7 @@ export class EmailService {
       email,
       password,
       loginUrl: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login",
-      center
+      center_name: center
     }
     return this.sendTemplateEmail(
       email,

@@ -39,7 +39,12 @@
       margin: 0;
       font-size: 22px;
       font-weight: 600;
-      color: #2c3e50;
+      color: #2d333b !important;
+    }
+
+    .header h1 span {
+      font-size: 20px; /* emoji size */
+      vertical-align: middle;
     }
 
     .content {
@@ -51,7 +56,7 @@
     .greeting {
       font-size: 17px;
       font-weight: 600;
-      color: #2c3e50;
+      color: #2d333b;
       margin-bottom: 6px;
     }
 
@@ -166,6 +171,15 @@
         font-size: 14px;
         word-break: break-word;
       }
+
+      .header h1 {
+        font-size: 20px !important;
+        color: #2d333b !important;
+      }
+
+      .header h1 span {
+        font-size: 18px !important;
+      }
     }
   </style>
 </head>
@@ -173,7 +187,7 @@
   <div class="email-container">
     <div class="header">
       <img src="https://upfolioplus.s3.eu-west-2.amazonaws.com/app-logo.png" alt="Company Logo" />
-      <h1>🏢 Center Account Created</h1>
+      <h1><span>🏢</span> Center Account Created</h1>
     </div>
     <div class="content">
       <div class="greeting">
