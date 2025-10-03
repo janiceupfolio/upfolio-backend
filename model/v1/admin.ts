@@ -99,6 +99,7 @@ class AdminService {
         message: "Admin created successfully",
       };
     } catch (error) {
+      console.log("Error:", error);
       await transaction.rollback();
       return {
         status: STATUS_CODES.SERVER_ERROR,
@@ -345,6 +346,7 @@ class AdminService {
         message: "Admin deleted successfully",
       };
     } catch (error) {
+      console.log("Error:", error);
       return {
         status: STATUS_CODES.SERVER_ERROR,
         message: "Server error",
