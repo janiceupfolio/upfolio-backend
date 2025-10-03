@@ -2,12 +2,13 @@ import { Request, Response } from "express";
 import { STATUS_CODES, STATUS_MESSAGE } from "../../configs/constants";
 import { userAuthenticationData } from "../../interface/user";
 import LearnerService from "../../model/v1/learner";
+import { senitizeObject } from "../../helper/utils";
 
 class learnerController {
   // Create learner method
   static async createLearner(req: Request, res: Response): Promise<void> {
     try {
-      let data = req.body;
+      let data = await senitizeObject(req.body);
       let userData = req.headers["user_info"] as userAuthenticationData;
       let request = await LearnerService.createLearner(data, userData);
       if (request.status !== STATUS_CODES.SUCCESS) {

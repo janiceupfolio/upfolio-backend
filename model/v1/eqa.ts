@@ -14,7 +14,7 @@ const { sequelize } = require("../../configs/database");
 class EQAService {
   // Create EQA
   static async createEQA(
-    data: UserInterface,
+    data: any,
     userData: userAuthenticationData
   ): Promise<any> {
     const transaction = await sequelize.transaction();

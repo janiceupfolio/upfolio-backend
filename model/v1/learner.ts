@@ -15,7 +15,7 @@ const { sequelize } = require("../../configs/database");
 class LearnerService {
   // Create Learner
   static async createLearner(
-    data: UserInterface,
+    data: any,
     userData: userAuthenticationData
   ): Promise<any> {
     const transaction = await sequelize.transaction();

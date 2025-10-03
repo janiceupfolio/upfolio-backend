@@ -1,13 +1,14 @@
 import { Request, Response } from "express";
 import { STATUS_CODES, STATUS_MESSAGE } from "../../configs/constants";
 import AssessorService from "../../model/v1/assessor";
-import { userAuthenticationData } from "../../interface/user";
+import { userAuthenticationData, UserInterface } from "../../interface/user";
+import { senitizeObject } from "../../helper/utils";
 
 class assessorController {
   // Create Assessor
   static async createAssessor(req: Request, res: Response): Promise<void> {
     try {
-      let data = req.body;
+      let data = await senitizeObject(req.body);
       let userData = req.headers["user_info"] as userAuthenticationData;
       let request = await AssessorService.createAssessor(data, userData);
       if (request.status !== STATUS_CODES.SUCCESS) {

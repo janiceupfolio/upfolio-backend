@@ -2,12 +2,13 @@ import { Request, Response } from "express";
 import { STATUS_CODES, STATUS_MESSAGE } from "../../configs/constants";
 import { userAuthenticationData } from "../../interface/user";
 import IQAService from "../../model/v1/iqa";
+import { senitizeObject } from "../../helper/utils";
 
 class IQAController {
   // Create IQA method
   static async createIQA(req: Request, res: Response): Promise<void> {
     try {
-      let data = req.body;
+      let data = await senitizeObject(req.body);
       let userData = req.headers["user_info"] as userAuthenticationData;
       let request = await IQAService.createIQA(data, userData);
       if (request.status !== STATUS_CODES.SUCCESS) {

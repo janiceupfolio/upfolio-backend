@@ -13,7 +13,7 @@ const { sequelize } = require("../../configs/database");
 class AssessorService {
   // Create Assessor
   static async createAssessor(
-    data: UserInterface,
+    data: any,
     userData: userAuthenticationData
   ): Promise<any> {
     const transaction = await sequelize.transaction();

@@ -540,3 +540,21 @@ export const retryDatabaseOperation = async <T>(
   
   throw lastError!;
 };
+
+export const senitizeObject = async (obj) => {
+  if (typeof obj !== "object" || obj === null) return obj;
+  const cleaned = Array.isArray(obj) ? [] : {};
+  for (const key in obj) {
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+    let value = obj[key];
+    if (typeof value === "string") {
+      value = value.trim(); // remove spaces
+    }
+    if (value === "" || value === null || value === undefined) {
+      // ❌ Skip empty fields
+      continue;
+    }
+    cleaned[key] = (typeof value === "object") ? senitizeObject(value) : value;
+  }
+  return cleaned;
+}

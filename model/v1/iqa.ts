@@ -13,7 +13,7 @@ const { sequelize } = require("../../configs/database");
 class IQAService {
   // Create IQA
   static async createIQA(
-    data: UserInterface,
+    data: any,
     userData: userAuthenticationData
   ): Promise<any> {
     const transaction = await sequelize.transaction();
