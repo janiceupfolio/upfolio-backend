@@ -21,6 +21,10 @@ class RequestQualificationService {
   ): Promise<any> {
     let transaction = await sequelize.transaction();
     try {
+      // @ts-ignore
+      if (data.id === null || data.id === undefined || data.id === 0 || data.id === '') {
+        delete data.id;
+      }
       // check only center admin can add the Request Qualification
       let isCenterAdmin = await User.findOne({
         where: {

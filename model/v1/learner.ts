@@ -20,6 +20,10 @@ class LearnerService {
   ): Promise<any> {
     const transaction = await sequelize.transaction();
     try {
+      // @ts-ignore
+      if (data.id === null || data.id === undefined || data.id === 0 || data.id === '') {
+        delete data.id;
+      }
       // Check if email already used
       let isEmailUsed = await User.findOne({
         where: { 
