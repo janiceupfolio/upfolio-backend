@@ -15,6 +15,12 @@ const DB_CREDENTIAL = {
     acquire: 30000,
     idle: 10000,
   },
+  dialectOptions: {
+    acquireTimeout: 60000,
+    timeout: 60000,
+    reconnect: true,
+  },
+  transactionType: 'IMMEDIATE',
   seederStorage: "sequelize",
   seederStorageTableName: "SequelizeMetaSeeders",
 };

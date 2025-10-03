@@ -7,7 +7,7 @@ import Units from "../../database/schema/units";
 import SubOutcomes from "../../database/schema/sub_outcomes";
 import OutcomeSubpoints from "../../database/schema/outcome_subpoints";
 import { Op, Order, Sequelize } from "sequelize";
-import { paginate, qualificationUserId } from "../../helper/utils";
+import { paginate, qualificationUserId, retryDatabaseOperation } from "../../helper/utils";
 import UserQualification from "../../database/schema/user_qualification";
 import Assessment from "../../database/schema/assessment";
 import AssessmentUnits from "../../database/schema/assessment_units";
@@ -42,46 +42,47 @@ class qualificationService {
     userData: userAuthenticationData,
     file
   ): Promise<any> {
-    const transaction = await sequelize.transaction();
-    try {
-      if (!file || !file.buffer || file.size === 0) {
-        return {
-          status: STATUS_CODES.BAD_REQUEST,
-          message: "Please upload a valid file.",
-        };
-      }
-      const workbook = XLSX.read(file.buffer, { type: "buffer" });
-      // Qualification data processing logic goes here
-      const sheetName = workbook.SheetNames[0]; // This is a string like "Sheet1"
-      const firstSheet = workbook.Sheets[sheetName]; // This gets the actual sheet object
-      // Extract values from specific cells
-      const qualificationName = firstSheet["B1"]?.v?.toString().trim() || "";
-      const qualificationNumber = firstSheet["B2"]?.v?.toString().trim() || "";
-      let validateQualificationNumber = await Qualifications.findOne({
-        where: { qualification_no: qualificationNumber, deletedAt: null },
-        attributes: ["id"],
-      });
-      if (validateQualificationNumber) {
-        return {
-          status: STATUS_CODES.BAD_REQUEST,
-          message: "Qualification Number Already Exist",
-        };
-      }
-      // Validate extracted data
-      if (!qualificationName || !qualificationNumber) {
-        return {
-          status: STATUS_CODES.BAD_REQUEST,
-          message: "Qualification name or number is missing in the Excel file.",
-        };
-      }
-      const qualificationData = await Qualifications.create(
-        {
-          name: qualificationName,
-          qualification_no: qualificationNumber,
-          created_by: userData.id,
-        },
-        { transaction }
-      );
+    return await retryDatabaseOperation(async () => {
+      const transaction = await sequelize.transaction();
+      try {
+        if (!file || !file.buffer || file.size === 0) {
+          return {
+            status: STATUS_CODES.BAD_REQUEST,
+            message: "Please upload a valid file.",
+          };
+        }
+        const workbook = XLSX.read(file.buffer, { type: "buffer" });
+        // Qualification data processing logic goes here
+        const sheetName = workbook.SheetNames[0]; // This is a string like "Sheet1"
+        const firstSheet = workbook.Sheets[sheetName]; // This gets the actual sheet object
+        // Extract values from specific cells
+        const qualificationName = firstSheet["B1"]?.v?.toString().trim() || "";
+        const qualificationNumber = firstSheet["B2"]?.v?.toString().trim() || "";
+        let validateQualificationNumber = await Qualifications.findOne({
+          where: { qualification_no: qualificationNumber, deletedAt: null },
+          attributes: ["id"],
+        });
+        if (validateQualificationNumber) {
+          return {
+            status: STATUS_CODES.BAD_REQUEST,
+            message: "Qualification Number Already Exist",
+          };
+        }
+        // Validate extracted data
+        if (!qualificationName || !qualificationNumber) {
+          return {
+            status: STATUS_CODES.BAD_REQUEST,
+            message: "Qualification name or number is missing in the Excel file.",
+          };
+        }
+        const qualificationData = await Qualifications.create(
+          {
+            name: qualificationName,
+            qualification_no: qualificationNumber,
+            created_by: userData.id,
+          },
+          { transaction }
+        );
       // Unit Data processing logic
       for (const sheetName of workbook.SheetNames) {
         if (!sheetName.toLowerCase().startsWith("unit")) continue;
@@ -158,23 +159,24 @@ class qualificationService {
             }
           }
         }
+        }
+        // Commit transaction
+        await transaction.commit();
+        return {
+          status: STATUS_CODES.SUCCESS,
+          data: qualificationData,
+          message: "Qualification created successfully.",
+        };
+      } catch (error) {
+        console.error("Error creating qualification:", error);
+        // Rollback transaction in case of error
+        await transaction.rollback();
+        return {
+          status: STATUS_CODES.SERVER_ERROR,
+          message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
+        };
       }
-      // Commit transaction
-      await transaction.commit();
-      return {
-        status: STATUS_CODES.SUCCESS,
-        data: qualificationData,
-        message: "Qualification created successfully.",
-      };
-    } catch (error) {
-      console.error("Error creating qualification:", error);
-      // Rollback transaction in case of error
-      await transaction.rollback();
-      return {
-        status: STATUS_CODES.SERVER_ERROR,
-        message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
-      };
-    }
+    });
   }
 
   // Method to clean existing problematic records in the database

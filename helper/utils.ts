@@ -501,3 +501,42 @@ export const activityCreate = async (data, t?: Transaction) => {
     // throw error;
   }
 };
+
+// Database retry utility with exponential backoff
+export const retryDatabaseOperation = async <T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<T> => {
+  let lastError: Error;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Check if it's a lock timeout error
+      if (error.code === 'ER_LOCK_WAIT_TIMEOUT' || 
+          error.name === 'SequelizeDatabaseError' && 
+          error.parent?.code === 'ER_LOCK_WAIT_TIMEOUT') {
+        
+        if (attempt === maxRetries) {
+          console.error(`Database operation failed after ${maxRetries + 1} attempts:`, error);
+          throw error;
+        }
+        
+        // Exponential backoff with jitter
+        const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
+        console.log(`Lock timeout detected, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      // For other errors, don't retry
+      throw error;
+    }
+  }
+  
+  throw lastError!;
+};
