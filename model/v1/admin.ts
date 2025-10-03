@@ -18,6 +18,10 @@ class AdminService {
   ): Promise<any> {
     const transaction = await sequelize.transaction();
     try {
+      // Remove id field if it's null or empty to prevent database error
+      if (data.id === null || data.id === undefined || data.id === 0) {
+        delete data.id;
+      }
       // Check if email already used
       let isEmailUsed = await User.findOne({
         where: { email: data.email, deletedAt: null },
