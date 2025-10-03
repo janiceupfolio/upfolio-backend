@@ -88,11 +88,11 @@ class AssessorService {
       );
 
       // Send Email to Assessor
-      // await emailService.sendAssessorAccountEmail(
-      //   createUser.name,
-      //   createUser.email,
-      //   data.password // Use the original password before hashing
-      // );
+      await emailService.sendAssessorAccountEmail(
+        createUser.name,
+        createUser.email,
+        data.password // Use the original password before hashing
+      );
 
       await transaction.commit();
       return {

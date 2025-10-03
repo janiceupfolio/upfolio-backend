@@ -83,12 +83,12 @@ class IQAService {
           { transaction }
         );
       }
-      // Send Email to Learner
-      // await emailService.sendLearnerAccountEmail(
-      //   createUser.name,
-      //   createUser.email,
-      //   data.password // Use the original password before hashing
-      // );
+      // Send Email to IQA
+      await emailService.sendIQAAccountEmail(
+        createUser.name,
+        createUser.email,
+        data.password // Use the original password before hashing
+      );
       await transaction.commit();
       return {
         status: STATUS_CODES.SUCCESS,

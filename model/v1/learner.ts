@@ -98,11 +98,11 @@ class LearnerService {
         }))
       );
       // Send Email to Learner
-      // await emailService.sendLearnerAccountEmail(
-      //   createUser.name,
-      //   createUser.email,
-      //   data.password // Use the original password before hashing
-      // );
+      await emailService.sendLearnerAccountEmail(
+        createUser.name,
+        createUser.email,
+        data.password // Use the original password before hashing
+      );
       // Associate Learner with Assessor if provided
       if (data.assessors) {
         const assessorIds = data.assessors

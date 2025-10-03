@@ -97,6 +97,13 @@ class AdminService {
           { transaction }
         );
       }
+      // Send Email to Center Admin
+      await emailService.sendCenterAdminAccountEmail(
+        createUser.name,
+        createUser.email,
+        data.password,
+        centerData.center_name
+      )
       await transaction.commit();
       return {
         status: STATUS_CODES.SUCCESS,

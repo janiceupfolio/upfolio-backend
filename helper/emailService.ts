@@ -100,7 +100,7 @@ export class EmailService {
       name,
       email,
       password,
-      loginUrl: loginUrl || process.env.FRONTEND_URL || "https://your-app.com/login"
+      loginUrl: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login"
     };
 
     return this.sendTemplateEmail(
@@ -124,7 +124,7 @@ export class EmailService {
       name,
       email,
       password,
-      loginUrl: loginUrl || process.env.FRONTEND_URL || "https://your-app.com/login"
+      loginUrl: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login"
     };
 
     return this.sendTemplateEmail(
@@ -135,6 +135,76 @@ export class EmailService {
     );
   }
 
+  /**
+   * Send Center Admin creation email
+   */
+  async sendCenterAdminAccountEmail(
+    name: string,
+    email: string,
+    password: string,
+    center: string,
+    loginUrl?: string,
+  ): Promise<boolean> {
+    const data: EmailTemplateData = {
+      name,
+      email,
+      password,
+      loginUrl: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login",
+      center
+    }
+    return this.sendTemplateEmail(
+      email,
+      "Center Account Created Successfully",
+      "center-account-created",
+      data
+    );
+  }
+
+  /**
+   * Send EQA creation email
+   */
+  async sendEQAAccountEmail(
+    name: string,
+    email: string,
+    password: string,
+    loginUrl?: string,
+  ): Promise<boolean> {
+    const data: EmailTemplateData = {
+      name,
+      email,
+      password,
+      loginUrl: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login",
+    }
+    return this.sendTemplateEmail(
+      email,
+      "EQA Account Created Successfully",
+      "eqa-account-created",
+      data
+    );
+  }
+
+  /**
+   * Send IQA creation email
+   */
+  async sendIQAAccountEmail(
+    name: string,
+    email: string,
+    password: string,
+    loginUrl?: string,
+  ): Promise<boolean> {
+    const data: EmailTemplateData = {
+      name,
+      email,
+      password,
+      loginUrl: loginUrl || process.env.FRONTEND_URL || "https://www.upfolioplus.co.uk/login",
+    }
+    return this.sendTemplateEmail(
+      email,
+      "IQA Account Created Successfully",
+      "iqa-account-created",
+      data
+    );
+  }
 
   /**
    * Send custom email with any template

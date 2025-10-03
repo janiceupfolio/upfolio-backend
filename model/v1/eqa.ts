@@ -14,15 +14,11 @@ const { sequelize } = require("../../configs/database");
 class EQAService {
   // Create EQA
   static async createEQA(
-    data: any,
+    data: UserInterface,
     userData: userAuthenticationData
   ): Promise<any> {
     const transaction = await sequelize.transaction();
     try {
-      // @ts-ignore
-      if (data.id === null || data.id === undefined || data.id === 0 || data.id === '') {
-        delete data.id;
-      }
       // Check if email already used
       let isEmailUsed = await User.findOne({
         where: { 
@@ -108,12 +104,12 @@ class EQAService {
           { transaction }
         );
       }
-      // Send Email to Learner
-      // await emailService.sendLearnerAccountEmail(
-      //   createUser.name,
-      //   createUser.email,
-      //   data.password // Use the original password before hashing
-      // );
+      // Send Email to EQA
+      await emailService.sendEQAAccountEmail(
+        createUser.name,
+        createUser.email,
+        data.password // Use the original password before hashing
+      );
       await transaction.commit();
       return {
         status: STATUS_CODES.SUCCESS,
