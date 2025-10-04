@@ -1,6 +1,7 @@
 require("dotenv").config();
 import { Roles, STATUS_CODES, STATUS_MESSAGE } from "../../configs/constants";
 import { compare } from "bcrypt";
+import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import {
   AuthResponse,
@@ -231,6 +232,15 @@ class userAuthService {
           };
         }
       }
+    }
+
+    // Compare old and new password (prevent same password update)
+    const isSamePassword = await bcrypt.compare(data.password, isUser.password);
+    if (isSamePassword) {
+      return {
+        status: STATUS_CODES.BAD_REQUEST,
+        message: "New password cannot be same as the old password",
+      };
     }
 
     // update password
