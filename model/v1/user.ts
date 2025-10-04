@@ -22,6 +22,7 @@ class userAuthService {
     try {
       // check is valid customer
       let isUser
+      console.log(requestFrom)
       if (requestFrom == true) {
         isUser = await User.findOne({
           where: {
@@ -30,6 +31,7 @@ class userAuthService {
           },
         });
       } else {
+        requestFrom = false
         isUser = await User.findOne({
           where: {
             email: data.email,
