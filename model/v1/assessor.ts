@@ -202,6 +202,7 @@ class AssessorService {
         message: "Assessor Updated Successfully",
       };
     } catch (error) {
+      console.log(error)
       await transaction.rollback()
       return {
         status: STATUS_CODES.SERVER_ERROR,
