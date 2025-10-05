@@ -830,12 +830,12 @@ class MasterService {
         WHERE q.deletedAt IS NULL 
           AND q.status = 1 
           AND uq.deletedAt IS NULL 
-          AND u.center_id = :centerId 
+          AND u.id = :assessorId 
           AND u.deletedAt IS NULL
           AND uq.createdAt >= :startOfMonth
         `,
             {
-              replacements: { centerId: userData.center_id, startOfMonth },
+              replacements: { assessorId, startOfMonth },
               type: sequelize.QueryTypes.SELECT,
             }
           )
