@@ -195,6 +195,7 @@ class AdminService {
           { center_address: data.center_address },
           { where: { id: currentCenter.id }, transaction }
         )
+        adminCenter.center_name = data.center_name
       }
       if (data.qualifications) {
         const qualificationIds = data.qualifications
@@ -226,6 +227,18 @@ class AdminService {
           })),
           { transaction }
         );
+      }
+      // check if user update an email need to send an email to the user
+      if (data.email && admin.email !== data.email) {
+        // Gernate Password
+        let password = await generateSecurePassword();
+        await User.update({ password: password }, { where: { id: admin.id } })
+        await emailService.sendCenterAdminAccountEmail(
+          data.name,
+          data.email,
+          password,
+          adminCenter.center_name
+        )
       }
       await transaction.commit();
       return {
@@ -261,7 +274,7 @@ class AdminService {
 
       // Where condition
       let whereCondition: any = { deletedAt: null, role: Roles.ADMIN };
-      
+
       // Search options for user fields and related center
       let searchOptions = {};
       if (search) {

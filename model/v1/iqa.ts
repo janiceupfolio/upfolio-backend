@@ -24,8 +24,8 @@ class IQAService {
       }
       // Check if email already used
       let isEmailUsed = await User.findOne({
-        where: { 
-          email: data.email, 
+        where: {
+          email: data.email,
           deletedAt: null,
           [Op.or]: [
             {
@@ -33,9 +33,9 @@ class IQAService {
               center_id: userData.center_id
             },
             {
-              center_id: { [Op.ne]: userData.center_id }, 
+              center_id: { [Op.ne]: userData.center_id },
             }
-          ] 
+          ]
         },
         attributes: ["id"],
       });
@@ -157,6 +157,16 @@ class IQAService {
           { transaction }
         );
       }
+      if (data.email && isIQA.email !== data.email) {
+        let password = await generateSecurePassword();
+        await User.update({ password: password }, { where: { id: isIQA.id } })
+        // Send Email to IQA
+        await emailService.sendIQAAccountEmail(
+          data.name,
+          data.email,
+          password
+        );
+      }
       await transaction.commit();
       return {
         status: STATUS_CODES.SUCCESS,
@@ -266,10 +276,10 @@ class IQAService {
         pagination: pagination,
         center_data: center_data
           ? {
-              id: center_data.id,
-              center_name: center_data.center_name,
-              center_address: center_data.center_address,
-            }
+            id: center_data.id,
+            center_name: center_data.center_name,
+            center_address: center_data.center_address,
+          }
           : {},
       };
       return {

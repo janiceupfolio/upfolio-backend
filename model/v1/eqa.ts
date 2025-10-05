@@ -206,6 +206,16 @@ class EQAService {
           { transaction }
         );
       }
+      if (data.email && isEQA.email !== data.email) {
+        // Gernate Password
+        let password = await generateSecurePassword();
+        await User.update({ password: password }, { where: { id: isEQA.id } })
+        await emailService.sendEQAAccountEmail(
+          data.name,
+          data.email,
+          password,
+        )
+      }
       await transaction.commit();
       return {
         status: STATUS_CODES.SUCCESS,

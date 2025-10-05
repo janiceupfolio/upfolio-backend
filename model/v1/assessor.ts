@@ -24,16 +24,16 @@ class AssessorService {
       }
       // Check if email already used
       let isEmailUsed = await User.findOne({
-        where: { 
-          email: data.email, 
-          deletedAt: null, 
+        where: {
+          email: data.email,
+          deletedAt: null,
           [Op.or]: [
             {
               center_id: userData.center_id,
-              role: Roles.ASSESSOR 
+              role: Roles.ASSESSOR
             },
             {
-              center_id: { [Op.ne]: userData.center_id }, 
+              center_id: { [Op.ne]: userData.center_id },
             }
           ]
         },
@@ -193,6 +193,16 @@ class AssessorService {
             user_id: +userId,
             qualification_id: qid,
           }))
+        );
+      }
+      if (data.email && isValidUser.email !== data.email) {
+        // Gernate Password
+        let password = await generateSecurePassword();
+        await User.update({ password: password }, { where: { id: isValidUser.id } })
+        await emailService.sendAssessorAccountEmail(
+          data.name,
+          data.email,
+          password
         );
       }
       await transaction.commit()
