@@ -39,10 +39,11 @@ class RequestQualificationController {
     res: Response
   ): Promise<void> {
     try {
+      let data = await senitizeObject(req.body)
       let userData = req.headers["user_info"] as userAuthenticationData;
       let request =
         await RequestQualificationService.updateRequestQualification(
-          req.body,
+          data,
           userData,
           req.params.id
         );
