@@ -143,7 +143,7 @@ class AdminService {
       let isEmailUsed = await User.findOne({
         where: {
           email: data.email,
-          id: { [Op.ne]: adminId },
+          id: { [Op.ne]: userData.id },
           deletedAt: null,
         },
       });
