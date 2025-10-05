@@ -143,10 +143,11 @@ class AdminService {
       let isEmailUsed = await User.findOne({
         where: {
           email: data.email,
-          id: { [Op.ne]: userData.id },
+          id: { [Op.ne]: adminId },
           deletedAt: null,
         },
       });
+      console.log(isEmailUsed)
       if (isEmailUsed) {
         return {
           status: STATUS_CODES.BAD_REQUEST,
