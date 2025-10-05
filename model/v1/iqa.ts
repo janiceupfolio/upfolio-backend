@@ -159,7 +159,7 @@ class IQAService {
       }
       if (data.email && isIQA.email !== data.email) {
         let password = await generateSecurePassword();
-        await User.update({ password: password }, { where: { id: isIQA.id } })
+        await User.update({ password: password }, { where: { id: isIQA.id }, transaction })
         // Send Email to IQA
         await emailService.sendIQAAccountEmail(
           data.name,

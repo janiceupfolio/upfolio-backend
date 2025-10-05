@@ -198,7 +198,7 @@ class AssessorService {
       if (data.email && isValidUser.email !== data.email) {
         // Gernate Password
         let password = await generateSecurePassword();
-        await User.update({ password: password }, { where: { id: isValidUser.id } })
+        await User.update({ password: password }, { where: { id: isValidUser.id }, transaction })
         await emailService.sendAssessorAccountEmail(
           data.name,
           data.email,

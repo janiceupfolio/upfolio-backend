@@ -341,7 +341,7 @@ class LearnerService {
       }
       if (data.email && isValidUser.email !== data.email) {
         let password = await generateSecurePassword();
-        await User.update({ password: password }, { where: { id: isValidUser.id } })
+        await User.update({ password: password }, { where: { id: isValidUser.id }, transaction })
         // Send Email to Learner
         await emailService.sendLearnerAccountEmail(
           data.name,

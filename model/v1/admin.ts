@@ -232,7 +232,7 @@ class AdminService {
       if (data.email && admin.email !== data.email) {
         // Gernate Password
         let password = await generateSecurePassword();
-        await User.update({ password: password }, { where: { id: admin.id } })
+        await User.update({ password: password }, { where: { id: admin.id }, transaction })
         await emailService.sendCenterAdminAccountEmail(
           data.name,
           data.email,

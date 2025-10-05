@@ -209,7 +209,7 @@ class EQAService {
       if (data.email && isEQA.email !== data.email) {
         // Gernate Password
         let password = await generateSecurePassword();
-        await User.update({ password: password }, { where: { id: isEQA.id } })
+        await User.update({ password: password }, { where: { id: isEQA.id }, transaction })
         await emailService.sendEQAAccountEmail(
           data.name,
           data.email,
