@@ -144,6 +144,7 @@ class AdminService {
         where: {
           email: data.email,
           id: { [Op.ne]: adminId },
+          center_id: { [Op.ne]: admin.center_id },
           deletedAt: null,
         },
       });
