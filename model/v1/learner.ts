@@ -469,13 +469,22 @@ class LearnerService {
         where: { id: userData.id, role: Roles.ASSESSOR, deletedAt: null },
       });
 
+      // through where condition
+      let throughWhere: any = {}
+      if (data.is_signed_off) {
+        throughWhere.is_signed_off = data.is_signed_off
+      }
+
       let include = [
         {
           model: Qualifications,
           as: "qualifications",
           where: whereConditionQualification,
           required: qualificationRequired,
-          through: { attributes: ["is_signed_off"] }, // prevent including join table info
+          through: { 
+            attributes: ["is_signed_off"],
+            where: throughWhere 
+          }, // prevent including join table info
         },
         {
           model: User,

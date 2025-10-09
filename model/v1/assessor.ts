@@ -284,6 +284,12 @@ class AssessorService {
           ]
         };
       }
+      let assessorRequired = false
+      let throughWhere: any = {}
+      if (data.learner_id) {
+        assessorRequired = true
+        throughWhere.user_id = data.learner_id
+      }
 
       let userData_ = await User.findAndCountAll({
         where: {
@@ -298,6 +304,15 @@ class AssessorService {
             where: qualificationWhereCondition,
             through: { attributes: [] }, // prevent including join table info
           },
+          {
+            model: User,
+            as: "learner",
+            required: assessorRequired,
+            through: { 
+              attributes: [],
+              where: throughWhere
+            },
+          }
         ],
         limit: fetchAll ? undefined : limit,
         offset: fetchAll ? undefined : offset,
