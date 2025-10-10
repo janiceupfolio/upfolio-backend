@@ -30,11 +30,11 @@ class SamplingService {
       mimeType === "application/pdf" ||
       mimeType === "application/msword" ||
       mimeType ===
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
       mimeType ===
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
       mimeType ===
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     ) {
       return EntityType.DOCUMENT;
     }
@@ -51,8 +51,14 @@ class SamplingService {
     try {
       let createSampling = await Sampling.create(data, { transaction });
       // Create Sampling Units
-      if (data.unit_ids && data.unit_ids.length > 0) {
-        for (const unitId of data.unit_ids) {
+      if (data.unit_ids) {
+        const unitIds = data.unit_ids
+          .toString()
+          .split(',')
+          .map(id => id.trim())
+          .filter(id => id); // remove empty strings
+
+        for (const unitId of unitIds) {
           await SamplingUnits.create(
             { sampling_id: createSampling.id, unit_id: unitId },
             { transaction }
@@ -60,8 +66,14 @@ class SamplingService {
         }
       }
       // Create Sampling Assessments
-      if (data.assessment_ids && data.assessment_ids.length > 0) {
-        for (const assessmentId of data.assessment_ids) {
+      if (data.assessment_ids) {
+        const assessmentIds = data.assessment_ids
+          .toString()
+          .split(',')
+          .map(id => id.trim())
+          .filter(id => id); // remove empty strings
+
+        for (const assessmentId of assessmentIds) {
           await SamplingAssessments.create(
             { sampling_id: createSampling.id, assessment_id: assessmentId },
             { transaction }
