@@ -1447,6 +1447,10 @@ class AssessmentService {
         deletedAt: null,
       };
 
+      if (data.assessment_status) {
+        whereCondition.assessment_status = data.assessment_status
+      }
+
       // Check login user is IQA
       let isIqa = await User.findOne({
         where: { id: userData.id, role: Roles.IQA },
