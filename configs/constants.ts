@@ -190,7 +190,8 @@ export const Entity = {
   OBSERVER: 'observer',
   IQA: 'iqa',
   EQA: 'eqa',
-  MODULE_RECORDS: "module_records"
+  MODULE_RECORDS: "module_records",
+  SAMPLING: "sampling"
 }
 
 export const EntityType = {

@@ -24,5 +24,8 @@ export const TABLE_NAME = {
   MODULE_RECORDS: "tbl_module_records",
   ACTIVITY: "tbl_activity",
   MODULE_RECORDS_LEARNER: "tbl_module_records_learner",
-  MODULE_RECORDS_QUALIFICATION: "tbl_module_records_qualification"
+  MODULE_RECORDS_QUALIFICATION: "tbl_module_records_qualification",
+  SAMPLING: "tbl_sampling",
+  SAMPLING_UNITS: "tbl_sampling_units",
+  SAMPLING_ASSESSMENT: "tbl_sampling_assessment"
 };
