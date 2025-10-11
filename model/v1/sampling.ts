@@ -50,7 +50,7 @@ class SamplingService {
     const transaction = await sequelize.transaction();
     try {
       data.reference_type = data.unit_ids ? 1 : data.assessment_ids ? 2 : null
-      data.created_by = userData.id
+      // data.created_by = userData.id
       let createSampling = await Sampling.create(data, { transaction });
       // Create Sampling Units
       if (data.unit_ids) {
