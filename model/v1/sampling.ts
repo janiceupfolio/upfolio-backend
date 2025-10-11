@@ -15,6 +15,7 @@ import SamplingAssessments from "../../database/schema/sampling_assessments";
 import Units from "../../database/schema/units";
 import Assessment from "../../database/schema/assessment";
 import { Order } from "sequelize";
+import User from "../../database/schema/user";
 const { sequelize } = require("../../configs/database");
 
 class SamplingService {
@@ -50,7 +51,8 @@ class SamplingService {
     const transaction = await sequelize.transaction();
     try {
       data.reference_type = data.unit_ids ? 1 : data.assessment_ids ? 2 : null
-      // data.created_by = userData.id
+      data.created_by = userData.id
+      data.center_id = userData.center_id
       let createSampling = await Sampling.create(data, { transaction });
       // Create Sampling Units
       if (data.unit_ids) {
@@ -248,14 +250,16 @@ class SamplingService {
   ): Promise<any> {
     const transaction = await sequelize.transaction();
     try {
-      await Sampling.destroy({ where: { id }, transaction });
-      await SamplingUnits.destroy({ where: { sampling_id: id }, transaction });
+      await Sampling.destroy({ where: { id }, force: true, transaction });
+      await SamplingUnits.destroy({ where: { sampling_id: id }, force: true, transaction });
       await SamplingAssessments.destroy({
         where: { sampling_id: id },
+        force: true,
         transaction,
       });
       await Image.destroy({
         where: { entity_type: Entity.SAMPLING, entity_id: id },
+        force: true,
         transaction,
       });
       await transaction.commit();
@@ -280,6 +284,10 @@ class SamplingService {
       let sampling = await Sampling.findOne({
         where: { id },
         include: [
+          {
+            model: User,
+            as: "learner",
+          },
           {
             model: Units,
             as: "units",
@@ -327,18 +335,22 @@ class SamplingService {
       const page = data?.page ? +data.page : 0;
       let offset = (page - 1) * limit;
       let sort_by = data?.sort_by || "createdAt";
-      let sort_order = data?.sort_order || "ASC";
+      let sort_order = data?.sort_order || "DESC";
       let order: Order = [[sort_by, sort_order]];
       const fetchAll = limit === 0 || page === 0;
 
       // Where condition
       let whereCondition: any = {
         deletedAt: null,
-        center_id: userData.center_id,
+        // center_id: userData.center_id,
       };
       let sampling = await Sampling.findAndCountAll({
         where: whereCondition,
         include: [
+          {
+            model: User,
+            as: "learner",
+          },
           {
             model: Units,
             as: "units",
