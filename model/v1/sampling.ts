@@ -49,6 +49,8 @@ class SamplingService {
   ): Promise<any> {
     const transaction = await sequelize.transaction();
     try {
+      data.reference_type = data.unit_ids ? 1 : data.assessment_ids ? 2 : null
+      data.created_by = userData.id
       let createSampling = await Sampling.create(data, { transaction });
       // Create Sampling Units
       if (data.unit_ids) {
@@ -135,16 +137,13 @@ class SamplingService {
   ): Promise<any> {
     const transaction = await sequelize.transaction();
     try {
-      let updateSampling = await Sampling.update(data, {
-        where: { id: data.id },
-        transaction,
-      });
       // Delete existing Sampling Units and recreate
       await SamplingUnits.destroy({
         where: { sampling_id: data.id },
         transaction,
       });
       if (data.unit_ids && data.unit_ids.length > 0) {
+        data.reference_type = 1
         for (const unitId of data.unit_ids) {
           await SamplingUnits.create(
             { sampling_id: data.id, unit_id: unitId },
@@ -159,6 +158,7 @@ class SamplingService {
         transaction,
       });
       if (data.assessment_ids && data.assessment_ids.length > 0) {
+        data.reference_type = 2
         for (const assessmentId of data.assessment_ids) {
           await SamplingAssessments.create(
             { sampling_id: data.id, assessment_id: assessmentId },
@@ -221,10 +221,14 @@ class SamplingService {
           }
         }
       }
+      let updateSampling = await Sampling.update(data, {
+        where: { id: data.id },
+        transaction,
+      });
       await transaction.commit();
       return {
         status: STATUS_CODES.SUCCESS,
-        data: updateSampling,
+        data: {},
         message: "Sampling updated successfully",
       };
     } catch (error) {
