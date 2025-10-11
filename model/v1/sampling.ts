@@ -15,6 +15,7 @@ import SamplingAssessments from "../../database/schema/sampling_assessments";
 import Units from "../../database/schema/units";
 import Assessment from "../../database/schema/assessment";
 import { Order } from "sequelize";
+import User from "../../database/schema/user";
 const { sequelize } = require("../../configs/database");
 
 class SamplingService {
@@ -249,14 +250,16 @@ class SamplingService {
   ): Promise<any> {
     const transaction = await sequelize.transaction();
     try {
-      await Sampling.destroy({ where: { id }, transaction });
-      await SamplingUnits.destroy({ where: { sampling_id: id }, transaction });
+      await Sampling.destroy({ where: { id }, force: true, transaction });
+      await SamplingUnits.destroy({ where: { sampling_id: id }, force: true, transaction });
       await SamplingAssessments.destroy({
         where: { sampling_id: id },
+        force: true,
         transaction,
       });
       await Image.destroy({
         where: { entity_type: Entity.SAMPLING, entity_id: id },
+        force: true,
         transaction,
       });
       await transaction.commit();
@@ -281,6 +284,10 @@ class SamplingService {
       let sampling = await Sampling.findOne({
         where: { id },
         include: [
+          {
+            model: User,
+            as: "learner",
+          },
           {
             model: Units,
             as: "units",
@@ -340,6 +347,10 @@ class SamplingService {
       let sampling = await Sampling.findAndCountAll({
         where: whereCondition,
         include: [
+          {
+            model: User,
+            as: "learner",
+          },
           {
             model: Units,
             as: "units",
