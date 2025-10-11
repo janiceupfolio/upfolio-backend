@@ -24,16 +24,16 @@ class AssessorService {
       }
       // Check if email already used
       let isEmailUsed = await User.findOne({
-        where: { 
-          email: data.email, 
-          deletedAt: null, 
+        where: {
+          email: data.email,
+          deletedAt: null,
           [Op.or]: [
             {
               center_id: userData.center_id,
-              role: Roles.ASSESSOR 
+              role: Roles.ASSESSOR
             },
             {
-              center_id: { [Op.ne]: userData.center_id }, 
+              center_id: { [Op.ne]: userData.center_id },
             }
           ]
         },
@@ -88,11 +88,11 @@ class AssessorService {
       );
 
       // Send Email to Assessor
-      // await emailService.sendAssessorAccountEmail(
-      //   createUser.name,
-      //   createUser.email,
-      //   data.password // Use the original password before hashing
-      // );
+      await emailService.sendAssessorAccountEmail(
+        createUser.name,
+        createUser.email,
+        data.password // Use the original password before hashing
+      );
 
       await transaction.commit();
       return {
@@ -195,6 +195,16 @@ class AssessorService {
           }))
         );
       }
+      if (data.email && isValidUser.email !== data.email) {
+        // Gernate Password
+        let password = await generateSecurePassword();
+        await User.update({ password: password }, { where: { id: isValidUser.id }, transaction })
+        await emailService.sendAssessorAccountEmail(
+          data.name,
+          data.email,
+          password
+        );
+      }
       await transaction.commit()
       return {
         data: {},
@@ -202,6 +212,7 @@ class AssessorService {
         message: "Assessor Updated Successfully",
       };
     } catch (error) {
+      console.log(error)
       await transaction.rollback()
       return {
         status: STATUS_CODES.SERVER_ERROR,
@@ -273,6 +284,12 @@ class AssessorService {
           ]
         };
       }
+      let assessorRequired = false
+      let throughWhere: any = {}
+      if (data.learner_id) {
+        assessorRequired = true
+        throughWhere.user_id = data.learner_id
+      }
 
       let userData_ = await User.findAndCountAll({
         where: {
@@ -287,6 +304,15 @@ class AssessorService {
             where: qualificationWhereCondition,
             through: { attributes: [] }, // prevent including join table info
           },
+          {
+            model: User,
+            as: "learner",
+            required: assessorRequired,
+            through: { 
+              attributes: [],
+              where: throughWhere
+            },
+          }
         ],
         limit: fetchAll ? undefined : limit,
         offset: fetchAll ? undefined : offset,

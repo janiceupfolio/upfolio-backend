@@ -224,6 +224,13 @@ User.belongsToMany(User, {
 });
 
 User.belongsToMany(User, {
+  through: "tbl_user_assessor",
+  foreignKey: "assessor_id",
+  otherKey: "user_id",
+  as: "learner",
+})
+
+User.belongsToMany(User, {
   through: "tbl_user_iqa",
   foreignKey: "user_id",
   otherKey: "iqa_id",

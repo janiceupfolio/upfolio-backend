@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Learner Account Created</title>
+  <title>Center Account Created</title>
   <style>
     body {
       background-color: #f5f7fa;
@@ -39,7 +39,12 @@
       margin: 0;
       font-size: 22px;
       font-weight: 600;
-      color: #2c3e50;
+      color: #2d333b !important;
+    }
+
+    .header h1 span {
+      font-size: 20px; /* emoji size */
+      vertical-align: middle;
     }
 
     .content {
@@ -51,7 +56,14 @@
     .greeting {
       font-size: 17px;
       font-weight: 600;
-      color: #2c3e50;
+      color: #2d333b;
+      margin-bottom: 6px;
+    }
+
+    .center-name {
+      font-size: 16px;
+      font-weight: 500;
+      color: #3f7dbf;
       margin-bottom: 14px;
     }
 
@@ -92,32 +104,6 @@
       border: 1px solid #f5e2b5;
       margin-bottom: 24px;
       font-size: 14px;
-    }
-
-    .features {
-      background-color: #f6f9fb;
-      border-left: 4px solid #8dbce9;
-      border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 28px;
-    }
-
-    .features h3 {
-      margin-top: 0;
-      color: #2c3e50;
-      font-size: 16px;
-      font-weight: 600;
-    }
-
-    .features ul {
-      margin: 12px 0 0 18px;
-      padding: 0;
-      color: #4b5563;
-      font-size: 14px;
-    }
-
-    .features li {
-      margin-bottom: 6px;
     }
 
     .button {
@@ -172,8 +158,7 @@
       }
 
       .content,
-      .credentials-box,
-      .features {
+      .credentials-box {
         padding: 16px 12px;
       }
 
@@ -186,6 +171,15 @@
         font-size: 14px;
         word-break: break-word;
       }
+
+      .header h1 {
+        font-size: 20px !important;
+        color: #2d333b !important;
+      }
+
+      .header h1 span {
+        font-size: 18px !important;
+      }
     }
   </style>
 </head>
@@ -193,15 +187,20 @@
   <div class="email-container">
     <div class="header">
       <img src="https://upfolioplus.s3.eu-west-2.amazonaws.com/app-logo.png" alt="Company Logo" />
-      <h1>🎓 Learner Account Created</h1>
+      <h1><span>🏢</span> Center Account Created</h1>
     </div>
     <div class="content">
       <div class="greeting">
         Hello {{NAME}},
       </div>
+
+      <div class="center-name">
+        Center: {{CENTER_NAME}}
+      </div>
+
       <div class="message">
         <p>
-          Welcome to our learning platform! Your learner account has been created successfully. You can now access all the learning resources and track your progress.
+          Welcome to our platform! Your center account has been created successfully. You can now log in and start managing your operations and users.
         </p>
       </div>
 
@@ -215,17 +214,6 @@
         ⚠️ This is a system-generated password. Please change it after your first login for better security.
       </div>
 
-      <div class="features">
-        <h3>📚 What You Can Do</h3>
-        <ul>
-          <li>Access your assigned courses and learning materials</li>
-          <li>Track your learning progress and achievements</li>
-          <li>Communicate with your assessors and instructors</li>
-          <li>Submit assignments and assessments</li>
-          <li>View your qualification progress</li>
-        </ul>
-      </div>
-
       <div class="text-center">
         <a href="{{LOGIN_URL}}" class="button">Login to Your Account</a>
       </div>
@@ -236,13 +224,13 @@
 
       <div class="signature">
         Best regards,<br />
-        <strong>Your Learning Team</strong>
+        <strong>Your Platform Team</strong>
       </div>
     </div>
 
     <div class="footer">
       This is an automated email. Please do not reply.<br />
-      &copy; 2025 Your Learning Platform. All rights reserved.
+      &copy; 2025 Your Platform. All rights reserved.
     </div>
   </div>
 </body>

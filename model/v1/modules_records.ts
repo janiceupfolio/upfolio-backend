@@ -356,6 +356,18 @@ class ModuleRecordsService {
         deletedAt: null,
       };
 
+      // Check if from API learner id get give an response of learner according
+      if (data.learner_id) {
+        let learnerInfo = await User.findOne({
+          where: { id: data.learner_id },
+          attributes: ["id", "center_id", "role"]
+        })
+        learnerInfo = JSON.parse(JSON.stringify(learnerInfo))
+        userData.id = learnerInfo.id
+        userData.center_id = learnerInfo.center_id
+        userData.role = learnerInfo.role
+      }
+
       // Center Admin (Role 7) can see all module records
       if (userData.role !== Roles.ADMIN) {  
         // For non-admin users, apply center filtering

@@ -30,7 +30,7 @@ class EQAController {
   static async updateEQA(req: Request, res: Response): Promise<void> {
     try {
       let id = req.params.id;
-      let data = req.body;
+      let data = await senitizeObject(req.body);
       let userData = req.headers["user_info"] as userAuthenticationData;
       let request = await EQAService.updateEQA(id, data, userData);
       if (request.status !== STATUS_CODES.SUCCESS) {

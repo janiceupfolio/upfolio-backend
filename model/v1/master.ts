@@ -823,18 +823,21 @@ class MasterService {
         sequelize
           .query(
             `
-          SELECT COUNT(DISTINCT q.id) as count 
-          FROM tbl_qualifications q 
-          INNER JOIN tbl_user_qualification uq ON q.id = uq.qualification_id 
-          INNER JOIN tbl_user_assessor ua ON uq.user_id = ua.user_id 
-          WHERE q.deletedAt IS NULL 
-            AND q.status = 1 
-            AND uq.deletedAt IS NULL 
-            AND ua.assessor_id = :assessorId 
-            AND ua.status = 1 
-            AND ua.deletedAt IS NULL
+        SELECT COUNT(DISTINCT q.id) as count 
+        FROM tbl_qualifications q 
+        INNER JOIN tbl_user_qualification uq ON q.id = uq.qualification_id 
+        INNER JOIN tbl_user u ON uq.user_id = u.id 
+        WHERE q.deletedAt IS NULL 
+          AND q.status = 1 
+          AND uq.deletedAt IS NULL 
+          AND u.id = :assessorId 
+          AND u.deletedAt IS NULL
+          AND uq.createdAt >= :startOfMonth
         `,
-            { replacements: { assessorId }, type: sequelize.QueryTypes.SELECT }
+            {
+              replacements: { assessorId, startOfMonth },
+              type: sequelize.QueryTypes.SELECT,
+            }
           )
           .then((r: any) => r[0]?.count || 0),
 

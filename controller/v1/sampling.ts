@@ -1,117 +1,92 @@
 import { Request, Response } from "express";
 import { STATUS_CODES, STATUS_MESSAGE } from "../../configs/constants";
 import { userAuthenticationData } from "../../interface/user";
-import LearnerService from "../../model/v1/learner";
 import { senitizeObject } from "../../helper/utils";
+import SamplingService from "../../model/v1/sampling";
 
-class learnerController {
-  // Create learner method
-  static async createLearner(req: Request, res: Response): Promise<void> {
+class SamplingController {
+  // Create Sampling
+  static async createSampling(req: Request, res: Response): Promise<void> {
     try {
       let data = await senitizeObject(req.body);
+      let files = req.files || [];
       let userData = req.headers["user_info"] as userAuthenticationData;
-      let request = await LearnerService.createLearner(data, userData);
+      let request = await SamplingService.createSampling(data, userData, files);
       if (request.status !== STATUS_CODES.SUCCESS) {
         res.handler.errorResponse(request.status, request.message);
         return;
       }
-      res.handler.successResponse(
-        request.status,
-        request.data,
-        request.message
-      );
+      res.handler.successResponse(request.status, request.data, request.message);
     } catch (error) {
       error = "server error";
       res.handler.serverError(error);
     }
   }
 
-  // Update learner method
-  static async updateLearner(req: Request, res: Response): Promise<void> {
+  // Update Sampling
+  static async updateSampling(req: Request, res: Response): Promise<void> {
     try {
-      let learnerId = req.params.id as string | number;
       let data = await senitizeObject(req.body);
+      data.id = +req.params.id;
+      let files = req.files || [];
       let userData = req.headers["user_info"] as userAuthenticationData;
-      let request = await LearnerService.updateLearner(
-        learnerId,
-        data,
-        userData
-      );
+      let request = await SamplingService.updateSampling(data, userData, files);
       if (request.status !== STATUS_CODES.SUCCESS) {
         res.handler.errorResponse(request.status, request.message);
         return;
       }
-      res.handler.successResponse(
-        request.status,
-        request.data,
-        request.message
-      );
+      res.handler.successResponse(request.status, request.data, request.message);
     } catch (error) {
       error = "server error";
       res.handler.serverError(error);
     }
   }
 
-  // List Learner method
-  static async listLearner(req: Request, res: Response): Promise<void> {
+  // Delete Sampling
+  static async deleteSampling(req: Request, res: Response): Promise<void> {
+    try {
+      let id = +req.params.id;
+      let userData = req.headers["user_info"] as userAuthenticationData;
+      let request = await SamplingService.deleteSampling(id, userData);
+      if (request.status !== STATUS_CODES.SUCCESS) {
+        res.handler.errorResponse(request.status, request.message);
+        return;
+      }
+      res.handler.successResponse(request.status, request.data, request.message);
+    } catch (error) {
+      error = "server error";
+      res.handler.serverError(error);
+    }
+  }
+
+  // Get Sampling
+  static async getSampling(req: Request, res: Response): Promise<void> {
+    try {
+      let id = +req.params.id;
+      let userData = req.headers["user_info"] as userAuthenticationData;
+      let request = await SamplingService.getSampling(id);
+      if (request.status !== STATUS_CODES.SUCCESS) {
+        res.handler.errorResponse(request.status, request.message);
+        return;
+      }
+      res.handler.successResponse(request.status, request.data, request.message);
+    } catch (error) {
+      error = "server error";
+      res.handler.serverError(error);
+    }
+  }
+
+  // List Sampling
+  static async listSampling(req: Request, res: Response): Promise<void> {
     try {
       let data = req.query;
       let userData = req.headers["user_info"] as userAuthenticationData;
-      let request = await LearnerService.listLearner(data, userData);
+      let request = await SamplingService.listSampling(data, userData);
       if (request.status !== STATUS_CODES.SUCCESS) {
         res.handler.errorResponse(request.status, request.message);
         return;
       }
-      res.handler.successResponse(
-        request.status,
-        request.data,
-        request.message
-      );
-    } catch (error) {
-      error = "server error";
-      res.handler.serverError(error);
-    }
-  }
-
-  // Detail Learner method
-  static async detailLearner(req: Request, res: Response): Promise<void> {
-    try {
-      let learnerId = req.params.id as string | number;
-      let userData = req.headers["user_info"] as userAuthenticationData;
-      let request = await LearnerService.detailLearner(learnerId, userData);
-      if (request.status !== STATUS_CODES.SUCCESS) {
-        res.handler.errorResponse(request.status, request.message);
-        return;
-      }
-      res.handler.successResponse(
-        request.status,
-        request.data,
-        request.message
-      );
-    } catch (error) {
-      error = "server error";
-      res.handler.serverError(error);
-    }
-  }
-
-  // Delete Learner method
-  static async deleteLearner(req: Request, res: Response): Promise<void> {
-    try {
-      let learnerId = req.params.id as string | number
-      let userData = req.headers["user_info"] as userAuthenticationData;
-      let request = await LearnerService.deleteLearner(
-        learnerId,
-        userData
-      );
-      if (request.status !== STATUS_CODES.SUCCESS) {
-        res.handler.errorResponse(request.status, request.message);
-        return;
-      }
-      res.handler.successResponse(
-        request.status,
-        request.data,
-        request.message
-      );
+      res.handler.successResponse(request.status, request.data, request.message);
     } catch (error) {
       error = "server error";
       res.handler.serverError(error);
@@ -119,4 +94,4 @@ class learnerController {
   }
 }
 
-export default learnerController;
+export default SamplingController;

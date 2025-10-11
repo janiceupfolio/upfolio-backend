@@ -12,13 +12,11 @@ const DB_CREDENTIAL = {
   pool: {
     max: 20,
     min: 0,
-    acquire: 30000,
+    acquire: 120000,
     idle: 10000,
   },
   dialectOptions: {
-    acquireTimeout: 60000,
-    timeout: 60000,
-    reconnect: true,
+    connectTimeout: 120000
   },
   transactionType: 'IMMEDIATE',
   seederStorage: "sequelize",

@@ -30,7 +30,7 @@ class assessorController {
   static async updateAssessor(req: Request, res: Response): Promise<void> {
     try {
       let assessorId = req.params.id as string | number;
-      let data = req.body;
+      let data = await senitizeObject(req.body);
       let userData = req.headers["user_info"] as userAuthenticationData;
       let request = await AssessorService.updateAssessor(
         data,

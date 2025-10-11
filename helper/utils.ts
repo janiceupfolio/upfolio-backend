@@ -211,28 +211,28 @@ export const generateSecurePassword = async (): Promise<string> => {
   const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const numbers = '0123456789';
   const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+  const allChars = lowercase + uppercase + numbers + symbols;
 
   // Pick one character from each category
-  let passwordChars = [
+  const passwordChars = [
     lowercase[Math.floor(Math.random() * lowercase.length)],
     uppercase[Math.floor(Math.random() * uppercase.length)],
     numbers[Math.floor(Math.random() * numbers.length)],
     symbols[Math.floor(Math.random() * symbols.length)],
   ];
 
-  // Pool of all characters
-  const allChars = lowercase + uppercase + numbers + symbols;
-
-  // Fill remaining characters (total 8 - already have 4)
-  for (let i = 0; i < 4; i++) {
+  // Fill remaining characters until password length = 8
+  while (passwordChars.length < 8) {
     passwordChars.push(allChars[Math.floor(Math.random() * allChars.length)]);
   }
 
-  // Shuffle array to avoid predictable order and return as string
-  // return passwordChars
-  //   .sort(() => Math.random() - 0.5)
-  //   .join('');
-  return "Admin@123"; // For testing purposes, returning a fixed password
+  // Shuffle to randomize order
+  const shuffledPassword = passwordChars.sort(() => Math.random() - 0.5).join('');
+
+  // Use fixed password in non-production mode
+  const password = process.env.NODE_ENV === "production" ? shuffledPassword : "Admin@123";
+
+  return password;
 };
 
 // Cache Common function
@@ -509,35 +509,35 @@ export const retryDatabaseOperation = async <T>(
   baseDelay: number = 1000
 ): Promise<T> => {
   let lastError: Error;
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await operation();
     } catch (error: any) {
       lastError = error;
-      
+
       // Check if it's a lock timeout error
-      if (error.code === 'ER_LOCK_WAIT_TIMEOUT' || 
-          error.name === 'SequelizeDatabaseError' && 
-          error.parent?.code === 'ER_LOCK_WAIT_TIMEOUT') {
-        
+      if (error.code === 'ER_LOCK_WAIT_TIMEOUT' ||
+        error.name === 'SequelizeDatabaseError' &&
+        error.parent?.code === 'ER_LOCK_WAIT_TIMEOUT') {
+
         if (attempt === maxRetries) {
           console.error(`Database operation failed after ${maxRetries + 1} attempts:`, error);
           throw error;
         }
-        
+
         // Exponential backoff with jitter
         const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
         console.log(`Lock timeout detected, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
-      
+
       // For other errors, don't retry
       throw error;
     }
   }
-  
+
   throw lastError!;
 };
 

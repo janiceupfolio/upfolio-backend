@@ -14,25 +14,32 @@
     }
 
     .email-container {
-      max-width: 560px;
-      margin: 0 auto;
+      max-width: 580px;
+      margin: 30px auto;
       background: #ffffff;
       border-radius: 10px;
-      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
       overflow: hidden;
+      border: 1px solid #e5eaf0;
     }
 
     .header {
-      background-color: #e0ecf8;
-      color: #2c3e50;
+      background: linear-gradient(135deg, #e0ecf8, #c9def4);
       text-align: center;
-      padding: 30px 20px 20px 20px;
+      padding: 28px 20px 20px 20px;
+    }
+
+    .header img {
+      width: 90px;
+      height: auto;
+      margin-bottom: 12px;
     }
 
     .header h1 {
       margin: 0;
       font-size: 22px;
       font-weight: 600;
+      color: #2c3e50;
     }
 
     .content {
@@ -44,7 +51,7 @@
     .greeting {
       font-size: 17px;
       font-weight: 600;
-      color: #4c6a92;
+      color: #2c3e50;
       margin-bottom: 14px;
     }
 
@@ -58,6 +65,7 @@
       padding: 16px;
       border-radius: 8px;
       margin-bottom: 22px;
+      border: 1px solid #d8e6f5;
       text-align: left;
     }
 
@@ -77,20 +85,18 @@
     }
 
     .warning {
-      background-color: #fdf8eb;
+      background-color: #fff8e6;
       color: #9c792c;
       padding: 13px 16px;
       border-radius: 8px;
+      border: 1px solid #f5e2b5;
       margin-bottom: 24px;
       font-size: 14px;
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
     }
 
     .features {
       background-color: #f6f9fb;
-      border-left: 4px solid #bcd7f1;
+      border-left: 4px solid #8dbce9;
       border-radius: 8px;
       padding: 16px;
       margin-bottom: 28px;
@@ -98,8 +104,9 @@
 
     .features h3 {
       margin-top: 0;
-      color: #4c6a92;
+      color: #2c3e50;
       font-size: 16px;
+      font-weight: 600;
     }
 
     .features ul {
@@ -115,10 +122,10 @@
 
     .button {
       display: inline-block;
-      background: #a3c4e3;
-      color: #2d3748;
+      background: #3f7dbf;
+      color: #ffffff;
       text-decoration: none;
-      padding: 11px 28px;
+      padding: 12px 32px;
       border-radius: 6px;
       font-size: 15px;
       font-weight: 600;
@@ -127,7 +134,7 @@
     }
 
     .button:hover {
-      background: #90b5dc;
+      background: #366da9;
     }
 
     .text-center {
@@ -161,6 +168,7 @@
       .email-container {
         width: 100%;
         border-radius: 0;
+        margin: 0;
       }
 
       .content,
@@ -184,6 +192,7 @@
 <body>
   <div class="email-container">
     <div class="header">
+      <img src="https://upfolioplus.s3.eu-west-2.amazonaws.com/app-logo.png" alt="Company Logo" />
       <h1>👨‍🏫 Assessor Account Created</h1>
     </div>
     <div class="content">
@@ -203,9 +212,7 @@
       </div>
 
       <div class="warning">
-        <span>
-          This is a system-generated password. Please change it after your first login for better security.
-        </span>
+        ⚠️ This is a system-generated password. Please change it after your first login for better security.
       </div>
 
       <div class="features">

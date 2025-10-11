@@ -26,16 +26,16 @@ class LearnerService {
       }
       // Check if email already used
       let isEmailUsed = await User.findOne({
-        where: { 
-          email: data.email, 
-          deletedAt: null, 
+        where: {
+          email: data.email,
+          deletedAt: null,
           [Op.or]: [
             {
               role: Roles.LEARNER,
               center_id: userData.center_id,
             },
             {
-              center_id: { [Op.ne]: userData.center_id }, 
+              center_id: { [Op.ne]: userData.center_id },
             }
           ]
         },
@@ -98,11 +98,11 @@ class LearnerService {
         }))
       );
       // Send Email to Learner
-      // await emailService.sendLearnerAccountEmail(
-      //   createUser.name,
-      //   createUser.email,
-      //   data.password // Use the original password before hashing
-      // );
+      await emailService.sendLearnerAccountEmail(
+        createUser.name,
+        createUser.email,
+        data.password // Use the original password before hashing
+      );
       // Associate Learner with Assessor if provided
       if (data.assessors) {
         const assessorIds = data.assessors
@@ -339,7 +339,16 @@ class LearnerService {
           { transaction }
         );
       }
-
+      if (data.email && isValidUser.email !== data.email) {
+        let password = await generateSecurePassword();
+        await User.update({ password: password }, { where: { id: isValidUser.id }, transaction })
+        // Send Email to Learner
+        await emailService.sendLearnerAccountEmail(
+          data.name,
+          data.email,
+          password
+        );
+      }
       await transaction.commit();
       return {
         data: {},
@@ -460,13 +469,22 @@ class LearnerService {
         where: { id: userData.id, role: Roles.ASSESSOR, deletedAt: null },
       });
 
+      // through where condition
+      let throughWhere: any = {}
+      if (data.is_signed_off) {
+        throughWhere.is_signed_off = data.is_signed_off
+      }
+
       let include = [
         {
           model: Qualifications,
           as: "qualifications",
           where: whereConditionQualification,
           required: qualificationRequired,
-          through: { attributes: [ "is_signed_off" ] }, // prevent including join table info
+          through: { 
+            attributes: ["is_signed_off"],
+            where: throughWhere 
+          }, // prevent including join table info
         },
         {
           model: User,
@@ -538,10 +556,10 @@ class LearnerService {
         pagination: pagination,
         center_data: center_data
           ? {
-              id: center_data.id,
-              center_name: center_data.center_name,
-              center_address: center_data.center_address,
-            }
+            id: center_data.id,
+            center_name: center_data.center_name,
+            center_address: center_data.center_address,
+          }
           : {},
       };
       return {
@@ -572,7 +590,7 @@ class LearnerService {
             model: Qualifications,
             as: "qualifications",
             required: false,
-            through: { attributes: [ "is_signed_off" ] }, // prevent including join table info
+            through: { attributes: ["is_signed_off"] }, // prevent including join table info
           },
           {
             model: User,
