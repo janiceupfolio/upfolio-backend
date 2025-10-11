@@ -50,7 +50,8 @@ class SamplingService {
     const transaction = await sequelize.transaction();
     try {
       data.reference_type = data.unit_ids ? 1 : data.assessment_ids ? 2 : null
-      // data.created_by = userData.id
+      data.created_by = userData.id
+      data.center_id = userData.center_id
       let createSampling = await Sampling.create(data, { transaction });
       // Create Sampling Units
       if (data.unit_ids) {
@@ -334,7 +335,7 @@ class SamplingService {
       // Where condition
       let whereCondition: any = {
         deletedAt: null,
-        center_id: userData.center_id,
+        // center_id: userData.center_id,
       };
       let sampling = await Sampling.findAndCountAll({
         where: whereCondition,
