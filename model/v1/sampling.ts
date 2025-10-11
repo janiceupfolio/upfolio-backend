@@ -12,8 +12,8 @@ import { centerId, deleteFileOnAWS, paginate, uploadFileOnAWS } from "../../help
 import Image from "../../database/schema/images";
 import SamplingUnits from "../../database/schema/sampling_units";
 import SamplingAssessments from "../../database/schema/sampling_assessments";
-import Units from "database/schema/units";
-import Assessment from "database/schema/assessment";
+import Units from "../../database/schema/units";
+import Assessment from "../../database/schema/assessment";
 import { Order } from "sequelize";
 const { sequelize } = require("../../configs/database");
 
