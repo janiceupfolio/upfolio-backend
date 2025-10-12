@@ -17,6 +17,7 @@ import Assessment from "../../database/schema/assessment";
 import { Op, Order } from "sequelize";
 import User from "../../database/schema/user";
 import AssessmentUnits from "../../database/schema/assessment_units";
+import Qualifications from "../../database/schema/qualifications";
 const { sequelize } = require("../../configs/database");
 
 class SamplingService {
@@ -292,6 +293,16 @@ class SamplingService {
       let sampling_ = await Sampling.findOne({
         where: { id },
         include: [
+          {
+            model: User,
+            as: "assessor",
+            attributes: ["id", "name", "surname"]
+          },
+          {
+            model: Qualifications,
+            as: "qualification",
+            attributes: ["id", "name", "qualification_no"]
+          },
           {
             model: User,
             as: "learner",
