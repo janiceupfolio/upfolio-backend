@@ -398,6 +398,7 @@ class qualificationService {
           id: unit.id,
           unitTitle: unit.unit_title,
           unitNumber: unit.unit_number,
+          unit_number: unit.unit_number,
           outcomes, // 🔁 directly attached here
         });
       }
