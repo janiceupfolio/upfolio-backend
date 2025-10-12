@@ -350,6 +350,7 @@ class SamplingService {
           {
             model: User,
             as: "learner",
+            attributes: ["id", "name", "surname"]
           },
           {
             model: Units,
