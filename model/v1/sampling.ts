@@ -14,8 +14,9 @@ import SamplingUnits from "../../database/schema/sampling_units";
 import SamplingAssessments from "../../database/schema/sampling_assessments";
 import Units from "../../database/schema/units";
 import Assessment from "../../database/schema/assessment";
-import { Order } from "sequelize";
+import { Op, Order } from "sequelize";
 import User from "../../database/schema/user";
+import AssessmentUnits from "../../database/schema/assessment_units";
 const { sequelize } = require("../../configs/database");
 
 class SamplingService {
@@ -76,6 +77,13 @@ class SamplingService {
           .split(',')
           .map(id => id.trim())
           .filter(id => id); // remove empty strings
+        
+        await Assessment.update({ is_sampling: true }, { where: { id: { [Op.in]: assessmentIds } } })
+        // Find All Unit which assigned to assessment
+        let assessment_ = await AssessmentUnits.findAll({
+          where: { assessment_id: { [Op.in]: assessmentIds } }
+        })
+        let unitIds = assessment_.map(data => data.unit_id)
 
         for (const assessmentId of assessmentIds) {
           await SamplingAssessments.create(
@@ -281,12 +289,13 @@ class SamplingService {
   // Get Sampling
   static async getSampling(id: number): Promise<any> {
     try {
-      let sampling = await Sampling.findOne({
+      let sampling_ = await Sampling.findOne({
         where: { id },
         include: [
           {
             model: User,
             as: "learner",
+            attributes: ["id", "name", "surname"]
           },
           {
             model: Units,
@@ -308,15 +317,12 @@ class SamplingService {
               "image_name",
               "image_size",
             ],
-            where: {
-              entity_type: Entity.SAMPLING,
-            },
           },
         ],
       });
       return {
         status: STATUS_CODES.SUCCESS,
-        data: sampling,
+        data: sampling_,
         message: "Sampling retrieved successfully",
       };
     } catch (error) {
@@ -342,7 +348,7 @@ class SamplingService {
       // Where condition
       let whereCondition: any = {
         deletedAt: null,
-        // center_id: userData.center_id,
+        center_id: userData.center_id,
       };
       let sampling = await Sampling.findAndCountAll({
         where: whereCondition,

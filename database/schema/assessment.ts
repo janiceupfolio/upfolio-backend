@@ -29,6 +29,7 @@ class Assessment
   public qualification_id!: number;
   public assessment_status!: number;
   public feedback!: string;
+  public is_sampling!: boolean;
   // timestamps!
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -79,6 +80,10 @@ Assessment.init(
     feedback: {
       type: DataTypes.TEXT,
       allowNull: true,
+    },
+    is_sampling: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
     }
   },
   {
