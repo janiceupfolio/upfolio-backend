@@ -11,13 +11,15 @@ import { paginate, qualificationUserId, retryDatabaseOperation } from "../../hel
 import UserQualification from "../../database/schema/user_qualification";
 import Assessment from "../../database/schema/assessment";
 import AssessmentUnits from "../../database/schema/assessment_units";
+import UserUnits from "../../database/schema/user_units";
+import AssessmentMarks from "../../database/schema/assessment_marks";
 const { sequelize } = require("../../configs/database");
 
 class qualificationService {
   // Helper method to clean description text
   private static cleanDescriptionText(text: string): string {
     if (!text) return "";
-    
+
     const originalText = text;
     const cleanedText = text
       // Remove the specific bullet character we found in the database (U+F0B7)
@@ -28,12 +30,12 @@ class qualificationService {
       .replace(/^[\s\-_*]+/g, "")
       // Remove any remaining leading/trailing whitespace
       .trim();
-    
+
     // Log if there was significant cleaning done
     if (originalText !== cleanedText) {
       // console.log(`Cleaned text: "${originalText}" -> "${cleanedText}"`);
     }
-    
+
     return cleanedText;
   }
 
@@ -83,82 +85,82 @@ class qualificationService {
           },
           { transaction }
         );
-      // Unit Data processing logic
-      for (const sheetName of workbook.SheetNames) {
-        if (!sheetName.toLowerCase().startsWith("unit")) continue;
-        // Process each unit sheet
-        const sheet = workbook.Sheets[sheetName];
-        const unitNo = sheet["B1"]?.v?.toString().trim() || "";
-        const unitName = sheet["B2"]?.v?.toString().trim() || "";
-        const unitRefNo = sheet["B3"]?.v?.toString().trim() || "";
-        if (!unitRefNo) {
-          return {
-            status: STATUS_CODES.BAD_REQUEST,
-            message: `Unit Reference Number is missing for unit ${unitNo}`,
-          };
-        }
+        // Unit Data processing logic
+        for (const sheetName of workbook.SheetNames) {
+          if (!sheetName.toLowerCase().startsWith("unit")) continue;
+          // Process each unit sheet
+          const sheet = workbook.Sheets[sheetName];
+          const unitNo = sheet["B1"]?.v?.toString().trim() || "";
+          const unitName = sheet["B2"]?.v?.toString().trim() || "";
+          const unitRefNo = sheet["B3"]?.v?.toString().trim() || "";
+          if (!unitRefNo) {
+            return {
+              status: STATUS_CODES.BAD_REQUEST,
+              message: `Unit Reference Number is missing for unit ${unitNo}`,
+            };
+          }
 
-        const existingUnit = await Units.findOne({
-          where: { unit_ref_no: unitRefNo, deletedAt: null },
-          attributes: ["id"],
-        });
+          const existingUnit = await Units.findOne({
+            where: { unit_ref_no: unitRefNo, deletedAt: null },
+            attributes: ["id"],
+          });
 
-        if (existingUnit) {
-          return {
-            status: STATUS_CODES.BAD_REQUEST,
-            message: `Unit Reference Number already exists: ${unitNo}`,
-          };
-        }
-        // create unit
-        let unitData = await Units.create(
-          {
-            qualification_id: qualificationData.id,
-            unit_title: unitName,
-            unit_number: unitNo,
-            unit_ref_no: unitRefNo,
-            created_by: userData.id,
-          },
-          { transaction }
-        );
-        // Extract sub outcome data
-        const range = XLSX.utils.decode_range(sheet["!ref"] || "");
-        let currentSubOutcomeId: number | null = null;
-        for (let row = 4; row <= range.e.r; row++) {
-          const codeCell = sheet[XLSX.utils.encode_cell({ c: 0, r: row })];
-          const descCell = sheet[XLSX.utils.encode_cell({ c: 1, r: row })];
+          if (existingUnit) {
+            return {
+              status: STATUS_CODES.BAD_REQUEST,
+              message: `Unit Reference Number already exists: ${unitNo}`,
+            };
+          }
+          // create unit
+          let unitData = await Units.create(
+            {
+              qualification_id: qualificationData.id,
+              unit_title: unitName,
+              unit_number: unitNo,
+              unit_ref_no: unitRefNo,
+              created_by: userData.id,
+            },
+            { transaction }
+          );
+          // Extract sub outcome data
+          const range = XLSX.utils.decode_range(sheet["!ref"] || "");
+          let currentSubOutcomeId: number | null = null;
+          for (let row = 4; row <= range.e.r; row++) {
+            const codeCell = sheet[XLSX.utils.encode_cell({ c: 0, r: row })];
+            const descCell = sheet[XLSX.utils.encode_cell({ c: 1, r: row })];
 
-          const code = codeCell?.v?.toString().trim();
-          const description = descCell?.v?.toString().trim();
+            const code = codeCell?.v?.toString().trim();
+            const description = descCell?.v?.toString().trim();
 
-          if (code && /^[0-9]+\.[0-9]+$/.test(code)) {
-            // Create SubOutcome
-            const subOutCome = await SubOutcomes.create(
-              {
-                unit_id: unitData.id,
-                qualification_id: qualificationData.id,
-                description: description || "",
-                outcome_number: code,
-                created_by: userData.id,
-              },
-              { transaction }
-            );
-            currentSubOutcomeId = subOutCome.id;
-          } else if (currentSubOutcomeId && !code && description) {
-            const cleanedDescription = this.cleanDescriptionText(description);
-            
-            // Only create SubPoints if the cleaned description is not empty
-            if (cleanedDescription && cleanedDescription.length > 0) {
-              await OutcomeSubpoints.create(
+            if (code && /^[0-9]+\.[0-9]+$/.test(code)) {
+              // Create SubOutcome
+              const subOutCome = await SubOutcomes.create(
                 {
-                  outcome_id: currentSubOutcomeId,
-                  point_text: cleanedDescription,
+                  unit_id: unitData.id,
+                  qualification_id: qualificationData.id,
+                  description: description || "",
+                  outcome_number: code,
                   created_by: userData.id,
                 },
                 { transaction }
               );
+              currentSubOutcomeId = subOutCome.id;
+            } else if (currentSubOutcomeId && !code && description) {
+              const cleanedDescription = this.cleanDescriptionText(description);
+
+              // Only create SubPoints if the cleaned description is not empty
+              if (cleanedDescription && cleanedDescription.length > 0) {
+                await OutcomeSubpoints.create(
+                  {
+                    outcome_id: currentSubOutcomeId,
+                    point_text: cleanedDescription,
+                    created_by: userData.id,
+                  },
+                  { transaction }
+                );
+              }
             }
           }
-        }
         }
         // Commit transaction
         await transaction.commit();
@@ -183,13 +185,13 @@ class qualificationService {
   static async cleanExistingRecords(): Promise<any> {
     try {
       console.log("Starting cleanup of existing records...");
-      
+
       // First, let's see what we actually have in the database
       const allRecords = await OutcomeSubpoints.findAll({
         limit: 20, // Just get a sample to see what we're working with
         attributes: ['id', 'point_text']
       });
-      
+
       // Enhanced detection patterns - look for more variations
       const problematicRecords = await OutcomeSubpoints.findAll({
         where: {
@@ -238,12 +240,12 @@ class qualificationService {
       });
 
       let cleanedCount = 0;
-      
+
       // Process the main problematic records
       for (const record of problematicRecords) {
         const originalText = record.point_text;
         const cleanedText = this.cleanDescriptionText(originalText);
-        
+
         if (cleanedText !== originalText && cleanedText.length > 0) {
           await record.update({ point_text: cleanedText });
           cleanedCount++;
@@ -254,7 +256,7 @@ class qualificationService {
       for (const record of potentiallyProblematic) {
         const originalText = record.point_text;
         const cleanedText = this.cleanDescriptionText(originalText);
-        
+
         if (cleanedText !== originalText && cleanedText.length > 0) {
           await record.update({ point_text: cleanedText });
           cleanedCount++;
@@ -263,8 +265,8 @@ class qualificationService {
 
       return {
         status: STATUS_CODES.SUCCESS,
-        data: { 
-          totalFound: problematicRecords.length + potentiallyProblematic.length, 
+        data: {
+          totalFound: problematicRecords.length + potentiallyProblematic.length,
           cleaned: cleanedCount,
           sampleRecords: allRecords.map(r => ({ id: r.id, text: r.point_text }))
         },
@@ -280,6 +282,7 @@ class qualificationService {
   }
 
   // Get qualifications method
+  // Get qualifications method
   static async getQualifications(
     qualificationId: number | string,
     userData: userAuthenticationData,
@@ -287,18 +290,26 @@ class qualificationService {
     assessmentId?: number | string
   ): Promise<any> {
     try {
+      // Build unit where condition
       let unitWhereCondition: any = {
         qualification_id: qualificationId
-      }
+      };
+
+      // Fetch assessment units if assessmentId is provided
       if (assessmentId) {
-        let assessmentData = await AssessmentUnits.findAll({
-          where: { assessment_id: assessmentId }
-        })
-        let unitIds = assessmentData.map((item) => item.unit_id);
+        const assessmentData = await AssessmentUnits.findAll({
+          where: { assessment_id: assessmentId },
+          attributes: ['unit_id'],
+          raw: true
+        });
+
+        const unitIds = assessmentData.map((item) => item.unit_id);
         if (unitIds.length > 0) {
-          unitWhereCondition.id = unitIds; // Sequelize auto treats array as IN
+          unitWhereCondition.id = unitIds;
         }
       }
+
+      // Fetch units with nested relationships in one query
       const units = await Units.findAll({
         where: unitWhereCondition,
         include: [
@@ -311,97 +322,123 @@ class qualificationService {
                 as: "outcomeSubpoints",
               },
             ],
-            order: [["outcome_number", "ASC"]],
           },
         ],
-        order: [["unit_number", "ASC"]],
+        order: [
+          ["unit_number", "ASC"],
+          [{ model: SubOutcomes, as: "subOutcomes" }, "outcome_number", "ASC"]
+        ],
       });
 
-      const result = {
-        units: [],
-      };
+      // Early return if no units found
+      if (!units || units.length === 0) {
+        return {
+          status: STATUS_CODES.SUCCESS,
+          data: { units: [] },
+          message: "Qualifications retrieved successfully.",
+        };
+      }
 
-      for (const unit of units) {
-        const outcomes = [];
-        //@ts-ignore
-        for (const outcome of unit.subOutcomes || []) {
-          const [sectionNumber, outcomeNumber] =
-            outcome.outcome_number.split(".");
-          const numericSection = parseInt(sectionNumber, 10).toString();
-          const numericOutcome = parseInt(outcomeNumber, 10).toString();
-          const fullOutcomeNumber = `${numericSection}.${numericOutcome}`;
-
-          const outcomeEntry: any = {
-            number: fullOutcomeNumber,
-            description: outcome.description,
-            id: outcome.id,
-          };
-
-          // Add outcome_marks - either from assessment_marks (if learner_id provided) or from SubOutcomes table
-          if (learnerId) {
-            const outcomeMarksData = await this.getOutcomeMarksFromAssessment(
-              outcome.id,
-              learnerId,
-              qualificationId,
-              assessmentId
-            );
-            outcomeEntry.outcome_marks = outcomeMarksData?.total_marks || "0";
-            outcomeEntry.max_outcome_marks = outcomeMarksData?.max_marks || outcome.marks || "0";
-          } else {
-            outcomeEntry.outcome_marks = "0";
-            outcomeEntry.max_outcome_marks = outcome.marks || "0";
-          }
-
-          if (outcome.outcomeSubpoints && outcome.outcomeSubpoints.length) {
-            // Keep existing subPoints for backward compatibility
-            outcomeEntry.subPoints = outcome.outcomeSubpoints.map(
-              (p) => p.point_text
-            );
-
-            // Add new sub_points with id and mark if learner_id is provided
-            if (learnerId) {
-              outcomeEntry.sub_points = await Promise.all(
-                outcome.outcomeSubpoints.map(async (p) => {
-                  // Get the latest assessment mark for this specific subpoint and learner
-                  const latestMarkData = await this.getLatestAssessmentMark(
-                    p.id,
-                    learnerId,
-                    qualificationId,
-                    assessmentId
-                  );
-                  
-                  return {
-                    id: p.id,
-                    point_text: p.point_text,
-                    mark: latestMarkData?.marks || "0",
-                    max_marks: latestMarkData?.max_marks || p.marks || "0" // Use assessment max_marks if available, otherwise fallback to subpoint marks
-                  };
-                })
-              );
-            } else {
-              // If no learner_id, just provide the structure without marks
-              outcomeEntry.sub_points = outcome.outcomeSubpoints.map((p) => ({
-                id: p.id,
-                point_text: p.point_text,
-                mark: "0",
-                max_marks: p.marks || "0" // Add max marks from OutcomeSubpoints table
-              }));
-            }
-          }
-
-          outcomes.push(outcomeEntry);
-        }
-
-        outcomes.sort((a, b) => this.compareOutcomeNumbers(a.number, b.number));
-
-        result.units.push({
-          id: unit.id,
-          unitTitle: unit.unit_title,
-          unitNumber: unit.unit_number,
-          unit_number: unit.unit_number,
-          outcomes, // 🔁 directly attached here
+      // Batch fetch sampling data if learnerId is provided
+      let samplingMap = new Map();
+      if (learnerId) {
+        const unitIds = units.map(unit => unit.id);
+        const samplingData = await UserUnits.findAll({
+          where: {
+            unit_id: unitIds,
+            user_id: learnerId
+          },
+          attributes: ["unit_id", "is_sampling"],
+          raw: true
+        });
+        samplingData.forEach(item => {
+          samplingMap.set(item.unit_id, item.is_sampling);
         });
       }
+
+      // Build result structure with parallel processing for marks
+      const result = {
+        units: await Promise.all(units.map(async (unit) => {
+          //@ts-ignore
+          const outcomes = await Promise.all((unit.subOutcomes || []).map(async (outcome) => {
+            // Parse outcome number
+            const [sectionNumber, outcomeNumber] = outcome.outcome_number.split(".");
+            const numericSection = parseInt(sectionNumber, 10).toString();
+            const numericOutcome = parseInt(outcomeNumber, 10).toString();
+            const fullOutcomeNumber = `${numericSection}.${numericOutcome}`;
+
+            // Build outcome entry
+            const outcomeEntry: any = {
+              number: fullOutcomeNumber,
+              description: outcome.description,
+              id: outcome.id,
+            };
+
+            // Add outcome marks
+            if (learnerId) {
+              const outcomeMarksData = await this.getOutcomeMarksFromAssessment(
+                outcome.id,
+                learnerId,
+                qualificationId,
+                assessmentId
+              );
+              outcomeEntry.outcome_marks = outcomeMarksData?.total_marks || "0";
+              outcomeEntry.max_outcome_marks = outcomeMarksData?.max_marks || outcome.marks || "0";
+            } else {
+              outcomeEntry.outcome_marks = "0";
+              outcomeEntry.max_outcome_marks = outcome.marks || "0";
+            }
+
+            // Add subpoints if they exist
+            if (outcome.outcomeSubpoints && outcome.outcomeSubpoints.length) {
+              // Keep existing subPoints for backward compatibility
+              outcomeEntry.subPoints = outcome.outcomeSubpoints.map(p => p.point_text);
+
+              // Add new sub_points with marks (parallel processing)
+              if (learnerId) {
+                outcomeEntry.sub_points = await Promise.all(
+                  outcome.outcomeSubpoints.map(async (p) => {
+                    const latestMarkData = await this.getLatestAssessmentMark(
+                      p.id,
+                      learnerId,
+                      qualificationId,
+                      assessmentId
+                    );
+
+                    return {
+                      id: p.id,
+                      point_text: p.point_text,
+                      mark: latestMarkData?.marks || "0",
+                      max_marks: latestMarkData?.max_marks || p.marks || "0"
+                    };
+                  })
+                );
+              } else {
+                outcomeEntry.sub_points = outcome.outcomeSubpoints.map((p) => ({
+                  id: p.id,
+                  point_text: p.point_text,
+                  mark: "0",
+                  max_marks: p.marks || "0"
+                }));
+              }
+            }
+
+            return outcomeEntry;
+          }));
+
+          // Sort outcomes
+          outcomes.sort((a, b) => this.compareOutcomeNumbers(a.number, b.number));
+
+          return {
+            id: unit.id,
+            unitTitle: unit.unit_title,
+            unitNumber: unit.unit_number,
+            unit_number: unit.unit_number,
+            outcomes,
+            isSampling: learnerId ? Boolean(samplingMap.get(unit.id)) : false
+          };
+        }))
+      };
 
       return {
         status: STATUS_CODES.SUCCESS,
@@ -462,7 +499,7 @@ class qualificationService {
     try {
       // Import AssessmentMarks model dynamically to avoid circular dependencies
       const AssessmentMarks = require("../../database/schema/assessment_marks").default;
-      
+
       let assessmentWhere: any = {
         sub_outcome_id: outcomeId,
         subpoint_id: null,
