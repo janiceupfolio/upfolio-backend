@@ -18,6 +18,7 @@ import { Op, Order } from "sequelize";
 import User from "../../database/schema/user";
 import AssessmentUnits from "../../database/schema/assessment_units";
 import Qualifications from "../../database/schema/qualifications";
+import UserUnits from "../../database/schema/user_units";
 const { sequelize } = require("../../configs/database");
 
 class SamplingService {
@@ -69,6 +70,7 @@ class SamplingService {
             { sampling_id: createSampling.id, unit_id: unitId },
             { transaction }
           );
+          await UserUnits.update({ is_sampling: true, reference_type: 1 }, { where: { unit_id: unitId } })
         }
       }
       // Create Sampling Assessments
@@ -85,7 +87,7 @@ class SamplingService {
           where: { assessment_id: { [Op.in]: assessmentIds } }
         })
         let unitIds = assessment_.map(data => data.unit_id)
-
+        await UserUnits.update({ is_sampling: true, reference_type: 2 }, { where: { unit_id: { [Op.in]: unitIds } } })
         for (const assessmentId of assessmentIds) {
           await SamplingAssessments.create(
             { sampling_id: createSampling.id, assessment_id: assessmentId },
