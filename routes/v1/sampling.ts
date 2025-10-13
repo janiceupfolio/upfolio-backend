@@ -24,7 +24,7 @@ router
 
 // Get Sampling route
 router
-  .route("/get/:id")
+  .route("/detail/:id")
   .get(authenticateUser, SamplingController.getSampling);
 
 // List Sampling route

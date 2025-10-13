@@ -371,28 +371,29 @@ class SamplingService {
             as: "learner",
             attributes: ["id", "name", "surname"]
           },
-          {
-            model: Units,
-            as: "units",
-            through: { attributes: [] },
-          },
-          {
-            model: Assessment,
-            as: "assessments",
-            through: { attributes: [] },
-          },
-          {
-            model: Image,
-            as: "images_sampling",
-            attributes: [
-              "id",
-              "image",
-              "image_type",
-              "image_name",
-              "image_size",
-            ],
-          },
+          // {
+          //   model: Units,
+          //   as: "units",
+          //   through: { attributes: [] },
+          // },
+          // {
+          //   model: Assessment,
+          //   as: "assessments",
+          //   through: { attributes: [] },
+          // },
+          // {
+          //   model: Image,
+          //   as: "images_sampling",
+          //   attributes: [
+          //     "id",
+          //     "image",
+          //     "image_type",
+          //     "image_name",
+          //     "image_size",
+          //   ],
+          // },
         ],
+        attributes: ["id", "sampling_type", "is_accept_sampling", "date"],
         limit: fetchAll ? undefined : limit,
         offset: fetchAll ? undefined : offset,
         order,
