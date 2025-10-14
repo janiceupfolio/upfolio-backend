@@ -10,6 +10,8 @@ import UserQualification from "../../database/schema/user_qualification";
 import Center from "../../database/schema/center";
 import UserAssessor from "../../database/schema/user_assessor";
 import UserIQA from "../../database/schema/user_iqa";
+import UserUnits from "../../database/schema/user_units";
+import Units from "../../database/schema/units";
 const { sequelize } = require("../../configs/database");
 
 class LearnerService {
@@ -95,7 +97,23 @@ class LearnerService {
         qualificationIds.map((qid) => ({
           user_id: createUser.id,
           qualification_id: qid,
-        }))
+        })),
+        { transaction }
+      );
+      // Find All units which are assigned to qualification
+      const units_ = await Units.findAll({
+        where: {
+          qualification_id: { [Op.in]: qualificationIds },
+        },
+      });
+      const units = units_.map((unit) => unit.id);
+      // Associate Learner with Units
+      await UserUnits.bulkCreate(
+        units.map((unitId) => ({
+          user_id: createUser.id,
+          unit_id: unitId,
+        })),
+        { transaction }
       );
       // Send Email to Learner
       await emailService.sendLearnerAccountEmail(
@@ -127,7 +145,8 @@ class LearnerService {
           assessorIds.map((assessorId) => ({
             user_id: createUser.id,
             assessor_id: assessorId,
-          }))
+          })),
+          { transaction }
         );
       }
       // Associate Learner with IQA if provided
@@ -154,7 +173,8 @@ class LearnerService {
           iqaIds.map((iqaId) => ({
             user_id: createUser.id,
             iqa_id: iqaId,
-          }))
+          })),
+          { transaction }
         );
       }
       await transaction.commit();
@@ -256,6 +276,7 @@ class LearnerService {
         await UserQualification.destroy({
           where: { user_id: learnerId },
           force: true,
+          transaction,
         });
 
         // Insert updated qualifications
@@ -263,6 +284,28 @@ class LearnerService {
           qualificationIds.map((qid) => ({
             user_id: +learnerId,
             qualification_id: qid,
+          })),
+          { transaction }
+        );
+
+        // Delete old units
+        await UserUnits.destroy({
+          where: { user_id: learnerId },
+          force: true,
+          transaction,
+        });
+        // Find All units which are assigned to qualification
+        const units_ = await Units.findAll({
+          where: {
+            qualification_id: { [Op.in]: qualificationIds },
+          },
+        });
+        const units = units_.map((unit) => unit.id);
+        // Insert new units
+        await UserUnits.bulkCreate(
+          units.map((unitId) => ({
+            user_id: +learnerId,
+            unit_id: unitId,
           })),
           { transaction }
         );
@@ -665,6 +708,10 @@ class LearnerService {
         force: true,
       });
       let deleteUserQualification = await UserQualification.destroy({
+        where: { user_id: learnerId },
+        force: true,
+      });
+      let deleteUserUnits = await UserUnits.destroy({
         where: { user_id: learnerId },
         force: true,
       });

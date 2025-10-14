@@ -14,8 +14,11 @@ import SamplingUnits from "../../database/schema/sampling_units";
 import SamplingAssessments from "../../database/schema/sampling_assessments";
 import Units from "../../database/schema/units";
 import Assessment from "../../database/schema/assessment";
-import { Order } from "sequelize";
+import { Op, Order } from "sequelize";
 import User from "../../database/schema/user";
+import AssessmentUnits from "../../database/schema/assessment_units";
+import Qualifications from "../../database/schema/qualifications";
+import UserUnits from "../../database/schema/user_units";
 const { sequelize } = require("../../configs/database");
 
 class SamplingService {
@@ -67,6 +70,7 @@ class SamplingService {
             { sampling_id: createSampling.id, unit_id: unitId },
             { transaction }
           );
+          await UserUnits.update({ is_sampling: true, reference_type: 1 }, { where: { unit_id: unitId } })
         }
       }
       // Create Sampling Assessments
@@ -76,7 +80,14 @@ class SamplingService {
           .split(',')
           .map(id => id.trim())
           .filter(id => id); // remove empty strings
-
+        
+        await Assessment.update({ is_sampling: true }, { where: { id: { [Op.in]: assessmentIds } } })
+        // Find All Unit which assigned to assessment
+        let assessment_ = await AssessmentUnits.findAll({
+          where: { assessment_id: { [Op.in]: assessmentIds } }
+        })
+        let unitIds = assessment_.map(data => data.unit_id)
+        await UserUnits.update({ is_sampling: true, reference_type: 2 }, { where: { unit_id: { [Op.in]: unitIds } } })
         for (const assessmentId of assessmentIds) {
           await SamplingAssessments.create(
             { sampling_id: createSampling.id, assessment_id: assessmentId },
@@ -281,12 +292,23 @@ class SamplingService {
   // Get Sampling
   static async getSampling(id: number): Promise<any> {
     try {
-      let sampling = await Sampling.findOne({
+      let sampling_ = await Sampling.findOne({
         where: { id },
         include: [
           {
             model: User,
+            as: "assessor",
+            attributes: ["id", "name", "surname"]
+          },
+          {
+            model: Qualifications,
+            as: "qualification",
+            attributes: ["id", "name", "qualification_no"]
+          },
+          {
+            model: User,
             as: "learner",
+            attributes: ["id", "name", "surname"]
           },
           {
             model: Units,
@@ -308,15 +330,12 @@ class SamplingService {
               "image_name",
               "image_size",
             ],
-            where: {
-              entity_type: Entity.SAMPLING,
-            },
           },
         ],
       });
       return {
         status: STATUS_CODES.SUCCESS,
-        data: sampling,
+        data: sampling_,
         message: "Sampling retrieved successfully",
       };
     } catch (error) {
@@ -342,7 +361,7 @@ class SamplingService {
       // Where condition
       let whereCondition: any = {
         deletedAt: null,
-        // center_id: userData.center_id,
+        center_id: userData.center_id,
       };
       let sampling = await Sampling.findAndCountAll({
         where: whereCondition,
@@ -350,29 +369,31 @@ class SamplingService {
           {
             model: User,
             as: "learner",
+            attributes: ["id", "name", "surname"]
           },
-          {
-            model: Units,
-            as: "units",
-            through: { attributes: [] },
-          },
-          {
-            model: Assessment,
-            as: "assessments",
-            through: { attributes: [] },
-          },
-          {
-            model: Image,
-            as: "images_sampling",
-            attributes: [
-              "id",
-              "image",
-              "image_type",
-              "image_name",
-              "image_size",
-            ],
-          },
+          // {
+          //   model: Units,
+          //   as: "units",
+          //   through: { attributes: [] },
+          // },
+          // {
+          //   model: Assessment,
+          //   as: "assessments",
+          //   through: { attributes: [] },
+          // },
+          // {
+          //   model: Image,
+          //   as: "images_sampling",
+          //   attributes: [
+          //     "id",
+          //     "image",
+          //     "image_type",
+          //     "image_name",
+          //     "image_size",
+          //   ],
+          // },
         ],
+        attributes: ["id", "sampling_type", "is_accept_sampling", "date"],
         limit: fetchAll ? undefined : limit,
         offset: fetchAll ? undefined : offset,
         order,

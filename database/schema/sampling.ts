@@ -9,6 +9,7 @@ import Assessment from "./assessment";
 import { Entity } from "../../configs/constants";
 import Image from "./images";
 import User from "./user";
+import Qualifications from "./qualifications";
 
 class Sampling extends Model<SamplingInterface> implements SamplingInterface {
   public id!: number;
@@ -146,6 +147,18 @@ Sampling.hasOne(User, {
   as: "learner",
   foreignKey: "id",
   sourceKey: "learner_id"
+})
+
+Sampling.hasOne(User, {
+  as: "assessor",
+  foreignKey: "id",
+  sourceKey: "assessor_id"
+})
+
+Sampling.hasOne(Qualifications, {
+  as: "qualification",
+  foreignKey: "id",
+  sourceKey: "qualification_id"
 })
 
 export default Sampling;

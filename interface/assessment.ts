@@ -10,6 +10,7 @@ export interface AssessmentInterface {
   qualification_id: number;
   assessment_status: number;
   feedback: string;
+  is_sampling: boolean;
   createdAt?: Date;
   updatedAt?: Date;
   deletedAt?: Date;
