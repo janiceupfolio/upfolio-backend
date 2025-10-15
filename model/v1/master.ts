@@ -20,6 +20,7 @@ import ModuleRecords from "../../database/schema/modules_records";
 import Activity from "../../database/schema/activity";
 import Image from "../../database/schema/images";
 import UserLearner from "../../database/schema/user_learner";
+import UserIQA from "../../database/schema/user_iqa";
 import AssessmentMarks from "../../database/schema/assessment_marks";
 import OutcomeSubpoints from "../../database/schema/outcome_subpoints";
 import SubOutcomes from "../../database/schema/sub_outcomes";
@@ -1618,9 +1619,9 @@ class MasterService {
           data: {
             overview: {
               numberOfQualifications: { value: 0, change: 0, note: "No qualifications" },
-              numberOfSampling: { value: 0, change: 0, note: "No Sampling" },
-              numberOfLearner: { value: 0, change: 0, note: "No Learner" },
-              numberOfSignedOff: { value: 0, change: 0, note: "No Signed Off" }
+              numberOfSampling: { value: 0, change: 0, note: "No sampling" },
+              numberOfLearner: { value: 0, change: 0, note: "No learners" },
+              numberOfSignedOff: { value: 0, change: 0, note: "No signed off qualifications" }
             },
             monthlyOverviewAssessmentApproveReject: [],
             activityFeed: [],
@@ -1676,7 +1677,7 @@ class MasterService {
               type: sequelize.QueryTypes.SELECT,
             }
           )
-          .then((r: any) => r[0]?.count || 0),
+          .then((r: any) => Number(r[0]?.count) || 0),
 
         // New qualifications this month
         sequelize
@@ -1702,7 +1703,7 @@ class MasterService {
               type: sequelize.QueryTypes.SELECT,
             }
           )
-          .then((r: any) => r[0]?.count || 0),
+          .then((r: any) => Number(r[0]?.count) || 0),
 
         // Total sampling records
         sequelize
@@ -1724,7 +1725,7 @@ class MasterService {
               type: sequelize.QueryTypes.SELECT,
             }
           )
-          .then((r: any) => r[0]?.count || 0),
+          .then((r: any) => Number(r[0]?.count) || 0),
 
         // New sampling this month
         sequelize
@@ -1747,7 +1748,7 @@ class MasterService {
               type: sequelize.QueryTypes.SELECT,
             }
           )
-          .then((r: any) => r[0]?.count || 0),
+          .then((r: any) => Number(r[0]?.count) || 0),
 
         // Total learners supervised by IQA
         sequelize
@@ -1767,7 +1768,7 @@ class MasterService {
               type: sequelize.QueryTypes.SELECT,
             }
           )
-          .then((r: any) => r[0]?.count || 0),
+          .then((r: any) => Number(r[0]?.count) || 0),
 
         // New learners this month
         sequelize
@@ -1788,7 +1789,7 @@ class MasterService {
               type: sequelize.QueryTypes.SELECT,
             }
           )
-          .then((r: any) => r[0]?.count || 0),
+          .then((r: any) => Number(r[0]?.count) || 0),
 
         // Total signed off qualifications
         sequelize
@@ -1811,7 +1812,7 @@ class MasterService {
               type: sequelize.QueryTypes.SELECT,
             }
           )
-          .then((r: any) => r[0]?.count || 0),
+          .then((r: any) => Number(r[0]?.count) || 0),
 
         // New signed off this month
         sequelize
@@ -1835,7 +1836,7 @@ class MasterService {
               type: sequelize.QueryTypes.SELECT,
             }
           )
-          .then((r: any) => r[0]?.count || 0),
+          .then((r: any) => Number(r[0]?.count) || 0),
       ]);
 
       // ------------------ Batch 2: Get monthly data and activity ------------------
@@ -1871,35 +1872,70 @@ class MasterService {
           }
         ),
 
-        // Recent activity for IQA
-        Activity.findAll({
-          where: {
-            center_id: centerId,
-            user_id: iqaId,
-          },
-          include: {
-            model: User,
-            as: "user",
-            attributes: ["id", "name", "surname", "email"],
-          },
-          order: [["createdAt", "DESC"]],
-          limit: 10,
-        }),
+        // Recent activity for IQA and supervised learners
+        (async () => {
+          // Get all learners supervised by this IQA
+          const supervisedLearners = await UserIQA.findAll({
+            where: {
+              iqa_id: iqaId,
+              status: 1,
+              deletedAt: null,
+            } as any,
+            attributes: ["user_id"],
+          });
+
+          const learnerIds = supervisedLearners.map((ui) => ui.user_id);
+          
+          // Include both IQA's activities and supervised learners' activities
+          const userIdsForActivity = [iqaId, ...learnerIds];
+
+          return Activity.findAll({
+            where: {
+              center_id: centerId,
+              user_id: { [Op.in]: userIdsForActivity },
+            },
+            include: {
+              model: User,
+              as: "user",
+              attributes: ["id", "name", "surname", "email"],
+            },
+            order: [["createdAt", "DESC"]],
+            limit: 10,
+          });
+        })(),
 
         // Activity records modules
         (async () => {
+          // Get all learners supervised by this IQA
+          const supervisedLearners = await UserIQA.findAll({
+            where: {
+              iqa_id: iqaId,
+              status: 1,
+              deletedAt: null,
+            } as any,
+            attributes: ["user_id"],
+          });
+
+          const learnerIds = supervisedLearners.map((ui) => ui.user_id);
+
+          // Return empty array if no learners are supervised
+          if (learnerIds.length === 0) {
+            return [];
+          }
+
+          // Get qualifications of all supervised learners
           const userQualifications = await UserQualification.findAll({
             where: {
-              user_id: iqaId,
+              user_id: { [Op.in]: learnerIds },
               status: 1,
               deletedAt: null,
             },
             attributes: ["qualification_id"],
           });
 
-          const qualificationIds = userQualifications.map(
-            (uq) => uq.qualification_id
-          );
+          const qualificationIds = [
+            ...new Set(userQualifications.map((uq) => uq.qualification_id)),
+          ];
 
           const moduleAccessConditions = [];
 
@@ -1910,22 +1946,33 @@ class MasterService {
             },
           });
 
-          // Qualification-type modules
+          // Qualification-type modules - Fixed SQL injection
           if (qualificationIds.length > 0) {
-            moduleAccessConditions.push({
-              [Op.and]: [
-                { is_learner_or_qualification: 2 },
-                {
-                  id: {
-                    [Op.in]: sequelize.literal(`(
-                    SELECT DISTINCT module_records_id 
-                    FROM tbl_module_records_qualification 
-                    WHERE qualification_id IN (${qualificationIds.join(",")})
-                  )`),
-                  },
-                },
-              ],
-            });
+            const moduleRecordsQualifications = await sequelize.query(
+              `
+              SELECT DISTINCT module_records_id 
+              FROM tbl_module_records_qualification 
+              WHERE qualification_id IN (:qualificationIds)
+                AND deletedAt IS NULL
+            `,
+              {
+                replacements: { qualificationIds },
+                type: sequelize.QueryTypes.SELECT,
+              }
+            );
+
+            const moduleRecordsIds = moduleRecordsQualifications.map(
+              (mrq: any) => mrq.module_records_id
+            );
+
+            if (moduleRecordsIds.length > 0) {
+              moduleAccessConditions.push({
+                [Op.and]: [
+                  { is_learner_or_qualification: 2 },
+                  { id: { [Op.in]: moduleRecordsIds } },
+                ],
+              });
+            }
           }
 
           return ModuleRecords.findAll({
@@ -1933,7 +1980,6 @@ class MasterService {
               deletedAt: null,
               center_id: centerId,
               [Op.or]: moduleAccessConditions,
-              created_by: iqaId,
             },
             include: {
               model: Image,
@@ -1953,21 +1999,13 @@ class MasterService {
       ]);
 
       // ------------------ Calculations ------------------
-      const qualificationChange =
-        totalQualifications > 0
-          ? (newQualificationsThisMonth / totalQualifications) * 100
-          : 0;
+      // Change values now represent actual counts instead of percentages
+      const qualificationChange = newQualificationsThisMonth;
+      const samplingChange = newSamplingThisMonth;
+      const learnerChange = newLearnersThisMonth;
+      const signedOffChange = newSignedOffThisMonth;
 
-      const samplingChange =
-        totalSampling > 0 ? (newSamplingThisMonth / totalSampling) * 100 : 0;
-
-      const learnerChange =
-        totalLearners > 0 ? (newLearnersThisMonth / totalLearners) * 100 : 0;
-
-      const signedOffChange =
-        totalSignedOff > 0 ? (newSignedOffThisMonth / totalSignedOff) * 100 : 0;
-
-      // Prepare monthly overview
+      // Prepare monthly overview for chart
       const monthlyOverview: any[] = [];
       const monthNames = [
         "Jan",
@@ -1984,6 +2022,7 @@ class MasterService {
         "Dec",
       ];
 
+      // Generate last 6 months of data
       for (let i = 5; i >= 0; i--) {
         const date = new Date();
         date.setMonth(date.getMonth() - i);
@@ -1993,11 +2032,12 @@ class MasterService {
         const monthData = (monthlyApproveRejectData as any[]).find(
           (m) => m.month === monthKey
         ) as any;
+        
         monthlyOverview.push({
           month: monthNames[date.getMonth()],
-          approved: monthData ? parseInt(monthData.approved) : 0,
-          rejected: monthData ? parseInt(monthData.rejected) : 0,
-          totalReviewed: monthData ? parseInt(monthData.total_reviewed) : 0,
+          approved: monthData ? Number(monthData.approved) : 0,
+          rejected: monthData ? Number(monthData.rejected) : 0,
+          totalReviewed: monthData ? Number(monthData.total_reviewed) : 0,
         });
       }
 
@@ -2009,22 +2049,22 @@ class MasterService {
           overview: {
             numberOfQualifications: {
               value: totalQualifications,
-              change: Math.abs(parseFloat(qualificationChange.toFixed(1))),
+              change: qualificationChange,
               note: `${newQualificationsThisMonth} added recently`,
             },
             numberOfSampling: {
               value: totalSampling,
-              change: Math.abs(parseFloat(samplingChange.toFixed(1))),
+              change: samplingChange,
               note: `${newSamplingThisMonth} new sampling this month`,
             },
             numberOfLearner: {
               value: totalLearners,
-              change: Math.abs(parseFloat(learnerChange.toFixed(1))),
+              change: learnerChange,
               note: `${newLearnersThisMonth} new learners this month`,
             },
             numberOfSignedOff: {
               value: totalSignedOff,
-              change: Math.abs(parseFloat(signedOffChange.toFixed(1))),
+              change: signedOffChange,
               note: `${newSignedOffThisMonth} signed off this month`,
             },
           },
