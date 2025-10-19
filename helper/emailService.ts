@@ -238,8 +238,9 @@ export class EmailService {
       email,
       message
     }
+    let toSendEmail = process.env.NODE_ENV == "production" ? "admin@upfolioplus.co.uk" : "payamit.ar@gmail.com"
     return this.sendTemplateEmail(
-      "urmilparsaniya4@gmail.com", // admin@upfolioplus.co.uk
+      toSendEmail, // admin@upfolioplus.co.uk
       `New Contact Request Received from ${name || "Guest"}`,
       "contact-us-admin",
       data
