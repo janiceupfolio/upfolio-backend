@@ -7,7 +7,7 @@ import {
   ModuleTypes,
 } from "../../configs/constants";
 import { Op, Order, Sequelize } from "sequelize";
-import { generateSecurePassword, paginate } from "../../helper/utils";
+import { generateSecurePassword, isValidEmail, paginate } from "../../helper/utils";
 import User from "../../database/schema/user";
 import Qualifications from "../../database/schema/qualifications";
 import UserQualification from "../../database/schema/user_qualification";
@@ -2073,6 +2073,40 @@ class MasterService {
           activityRecordsModules,
         },
       };
+    } catch (error) {
+      console.log(error);
+      return {
+        status: STATUS_CODES.SERVER_ERROR,
+        message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
+
+  // Contact Us
+  static async contactUs(data): Promise<any> {
+    try {
+      let isValidEmail_ = await isValidEmail(data.email) 
+      if (!isValidEmail_) {
+        return {
+          status: STATUS_CODES.CONFLICT,
+          message: "Invalid Email Address"
+        }
+      }
+      // Send Email to Customer
+      await emailService.sendContactUsCustomerEmail(
+        data.email,
+        data.name
+      )
+      // Send Email to Admin
+      await emailService.sendContactUsAdminEmail(
+        data.name,
+        data.email,
+        data.message
+      )
+      return {
+        status: STATUS_CODES.SUCCESS,
+        message: "Success"
+      }
     } catch (error) {
       console.log(error);
       return {

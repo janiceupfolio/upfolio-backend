@@ -31,4 +31,7 @@ router.route("/dashboard/learner").get(authenticateUser, MasterController.getDas
 // Dashboard route IQA
 router.route("/dashboard/iqa").get(authenticateUser, MasterController.getDashboardIQA)
 
+// Contact Us
+router.route("/contact-us").post(MasterController.contactUs)
+
 export default router;
