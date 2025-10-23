@@ -49,6 +49,8 @@ export interface UserInterface {
   additional_assessor_id?: number; // Optional field for additional Assessor ID
   license_year?: number;
   license_year_expiry?: string;
+  uln_number?: string;
+  name_of_awarding_body?: string;
 }
 
 export interface userAuthenticationData {

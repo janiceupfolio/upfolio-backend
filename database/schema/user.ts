@@ -43,6 +43,8 @@ class User extends Model<UserInterface> implements UserInterface {
   public additional_learning_needs!: number; // 1: Yes | 2: No | 3: Prefer not to say
   public license_year!: number;
   public license_year_expiry!: string;
+  public uln_number!: string;
+  public name_of_awarding_body!: string;
   // timestamps!
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -204,6 +206,16 @@ User.init(
       type: DataTypes.STRING,
       allowNull: true,
       comment: "Learner License Year Expiry"
+    },
+    uln_number: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: "Learner ULN Number"
+    },
+    name_of_awarding_body: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: "Learner Name of Awarding Body"
     }
   },
   { ...BaseModel.initBaseOptions(sequelize), tableName: TABLE_NAME.USER }
