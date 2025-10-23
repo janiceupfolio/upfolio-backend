@@ -207,6 +207,47 @@ export class EmailService {
   }
 
   /**
+   * Send Contact US Email Customer
+   */
+  async sendContactUsCustomerEmail(
+    email: string,
+    name: string
+  ): Promise<boolean> {
+    const data: EmailTemplateData = {
+      name,
+      email
+    }
+    return this.sendTemplateEmail(
+      email,
+      "Upfolio Plus – Thank You for Contacting Us",
+      "contact-us-customer",
+      data
+    )
+  }
+
+  /**
+   * Send Contact US Email Admin
+   */
+  async sendContactUsAdminEmail(
+    name: string,
+    email: string,
+    message: string
+  ): Promise<boolean> {
+    const data: EmailTemplateData = {
+      name,
+      email,
+      message
+    }
+    let toSendEmail = process.env.NODE_ENV == "production" ? "admin@upfolioplus.co.uk" : "payamit.ar@gmail.com"
+    return this.sendTemplateEmail(
+      toSendEmail, // admin@upfolioplus.co.uk
+      `New Contact Request Received from ${name || "Guest"}`,
+      "contact-us-admin",
+      data
+    )
+  }
+
+  /**
    * Send custom email with any template
    */
   async sendCustomEmail(

@@ -5,4 +5,5 @@ export interface UserIQAInterface {
   status: number;
   createdAt?: Date;
   updatedAt?: Date;
+  deletedAt?: Date;
 }

@@ -7,7 +7,7 @@ import {
   ModuleTypes,
 } from "../../configs/constants";
 import { Op, Order, Sequelize } from "sequelize";
-import { generateSecurePassword, paginate } from "../../helper/utils";
+import { generateSecurePassword, isValidEmail, paginate } from "../../helper/utils";
 import User from "../../database/schema/user";
 import Qualifications from "../../database/schema/qualifications";
 import UserQualification from "../../database/schema/user_qualification";
@@ -20,6 +20,7 @@ import ModuleRecords from "../../database/schema/modules_records";
 import Activity from "../../database/schema/activity";
 import Image from "../../database/schema/images";
 import UserLearner from "../../database/schema/user_learner";
+import UserIQA from "../../database/schema/user_iqa";
 import AssessmentMarks from "../../database/schema/assessment_marks";
 import OutcomeSubpoints from "../../database/schema/outcome_subpoints";
 import SubOutcomes from "../../database/schema/sub_outcomes";
@@ -1408,13 +1409,13 @@ class MasterService {
           AND a.createdAt >= :sixMonthsAgo
           AND a.deletedAt IS NULL
       `;
-      
+
       const replacements = { centerId, learnerId, sixMonthsAgo };
       if (qualificationId) {
         monthlyQuery += ` AND a.qualification_id = :qualificationId`;
         replacements['qualificationId'] = qualificationId;
       }
-      
+
       monthlyQuery += `
         GROUP BY DATE_FORMAT(a.createdAt, '%Y-%m')
         ORDER BY month ASC
@@ -1434,13 +1435,13 @@ class MasterService {
           AND al.learner_id = :learnerId
           AND a.deletedAt IS NULL
       `;
-      
+
       const statusReplacements = { centerId, learnerId };
       if (qualificationId) {
         statusQuery += ` AND a.qualification_id = :qualificationId`;
         statusReplacements['qualificationId'] = qualificationId;
       }
-      
+
       statusQuery += ` GROUP BY a.assessment_status`;
 
       const statusDistribution = await sequelize.query(statusQuery, {
@@ -1517,13 +1518,13 @@ class MasterService {
       WHERE uq.user_id = :learnerId
         AND uq.is_signed_off = FALSE
       `;
-      
+
       const qualificationProgressReplacements = { learnerId };
       if (qualificationId) {
         qualificationProgressQuery += ` AND uq.qualification_id = :qualificationId`;
         qualificationProgressReplacements['qualificationId'] = qualificationId;
       }
-      
+
       qualificationProgressQuery += `
       GROUP BY uq.qualification_id, q.name, u.id
       ORDER BY q.id, u.unit_number
@@ -1597,6 +1598,515 @@ class MasterService {
           qualificationProgressData: nestedQualifications
         },
       };
+    } catch (error) {
+      console.log(error);
+      return {
+        status: STATUS_CODES.SERVER_ERROR,
+        message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
+
+  static async getDashboardIQA(
+    data: any,
+    userData: userAuthenticationData
+  ): Promise<any> {
+    try {
+      if (userData.role !== Roles.IQA) {
+        return {
+          status: STATUS_CODES.SUCCESS,
+          message: STATUS_MESSAGE.DASHBOARD.DASHBOARD_DATA,
+          data: {
+            overview: {
+              numberOfQualifications: { value: 0, change: 0, note: "No qualifications" },
+              numberOfSampling: { value: 0, change: 0, note: "No sampling" },
+              numberOfLearner: { value: 0, change: 0, note: "No learners" },
+              numberOfSignedOff: { value: 0, change: 0, note: "No signed off qualifications" }
+            },
+            monthlyOverviewAssessmentApproveReject: [],
+            activityFeed: [],
+            activityRecordsModules: [],
+          }
+        };
+      }
+
+      const currentDate = new Date();
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(currentDate.getMonth() - 6);
+
+      const startOfMonth = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        1
+      );
+
+      const iqaId = userData.id;
+      const centerId = userData.center_id;
+
+      // ------------------ Batch 1: Get IQA-specific counts ------------------
+      const [
+        totalQualifications,
+        newQualificationsThisMonth,
+        totalSampling,
+        newSamplingThisMonth,
+        totalLearners,
+        newLearnersThisMonth,
+        totalSignedOff,
+        newSignedOffThisMonth,
+      ] = await Promise.all([
+        // Total qualifications supervised by this IQA
+        sequelize
+          .query(
+            `
+          SELECT COUNT(DISTINCT q.id) as count 
+          FROM tbl_qualifications q 
+          INNER JOIN tbl_user_qualification uq ON q.id = uq.qualification_id 
+          INNER JOIN tbl_user u ON uq.user_id = u.id 
+          INNER JOIN tbl_user_iqa ui ON u.id = ui.user_id
+          WHERE q.deletedAt IS NULL 
+            AND q.status = 1 
+            AND uq.deletedAt IS NULL 
+            AND u.center_id = :centerId 
+            AND u.deletedAt IS NULL
+            AND ui.iqa_id = :iqaId
+            AND ui.status = 1
+            AND ui.deletedAt IS NULL
+        `,
+            {
+              replacements: { centerId, iqaId },
+              type: sequelize.QueryTypes.SELECT,
+            }
+          )
+          .then((r: any) => Number(r[0]?.count) || 0),
+
+        // New qualifications this month
+        sequelize
+          .query(
+            `
+          SELECT COUNT(DISTINCT q.id) as count 
+          FROM tbl_qualifications q 
+          INNER JOIN tbl_user_qualification uq ON q.id = uq.qualification_id 
+          INNER JOIN tbl_user u ON uq.user_id = u.id 
+          INNER JOIN tbl_user_iqa ui ON u.id = ui.user_id
+          WHERE q.deletedAt IS NULL 
+            AND q.status = 1 
+            AND uq.deletedAt IS NULL 
+            AND u.center_id = :centerId 
+            AND u.deletedAt IS NULL
+            AND ui.iqa_id = :iqaId
+            AND ui.status = 1
+            AND ui.deletedAt IS NULL
+            AND uq.createdAt >= :startOfMonth
+        `,
+            {
+              replacements: { centerId, iqaId, startOfMonth },
+              type: sequelize.QueryTypes.SELECT,
+            }
+          )
+          .then((r: any) => Number(r[0]?.count) || 0),
+
+        // Total sampling records
+        sequelize
+          .query(
+            `
+          SELECT COUNT(DISTINCT s.id) as count 
+          FROM tbl_sampling s 
+          INNER JOIN tbl_user u ON s.learner_id = u.id
+          INNER JOIN tbl_user_iqa ui ON u.id = ui.user_id
+          WHERE ui.iqa_id = :iqaId
+            AND ui.status = 1
+            AND ui.deletedAt IS NULL
+            AND s.deletedAt IS NULL
+            AND u.center_id = :centerId
+            AND u.deletedAt IS NULL
+        `,
+            {
+              replacements: { centerId, iqaId },
+              type: sequelize.QueryTypes.SELECT,
+            }
+          )
+          .then((r: any) => Number(r[0]?.count) || 0),
+
+        // New sampling this month
+        sequelize
+          .query(
+            `
+          SELECT COUNT(DISTINCT s.id) as count 
+          FROM tbl_sampling s 
+          INNER JOIN tbl_user u ON s.learner_id = u.id
+          INNER JOIN tbl_user_iqa ui ON u.id = ui.user_id
+          WHERE ui.iqa_id = :iqaId
+            AND ui.status = 1
+            AND ui.deletedAt IS NULL
+            AND s.deletedAt IS NULL
+            AND u.center_id = :centerId
+            AND u.deletedAt IS NULL
+            AND s.createdAt >= :startOfMonth
+        `,
+            {
+              replacements: { centerId, iqaId, startOfMonth },
+              type: sequelize.QueryTypes.SELECT,
+            }
+          )
+          .then((r: any) => Number(r[0]?.count) || 0),
+
+        // Total learners supervised by IQA
+        sequelize
+          .query(
+            `
+          SELECT COUNT(DISTINCT ui.user_id) as count 
+          FROM tbl_user_iqa ui 
+          INNER JOIN tbl_user u ON ui.user_id = u.id 
+          WHERE ui.iqa_id = :iqaId 
+            AND ui.status = 1 
+            AND ui.deletedAt IS NULL 
+            AND u.deletedAt IS NULL
+            AND u.center_id = :centerId
+        `,
+            {
+              replacements: { centerId, iqaId },
+              type: sequelize.QueryTypes.SELECT,
+            }
+          )
+          .then((r: any) => Number(r[0]?.count) || 0),
+
+        // New learners this month
+        sequelize
+          .query(
+            `
+          SELECT COUNT(DISTINCT ui.user_id) as count 
+          FROM tbl_user_iqa ui 
+          INNER JOIN tbl_user u ON ui.user_id = u.id 
+          WHERE ui.iqa_id = :iqaId 
+            AND ui.status = 1 
+            AND ui.deletedAt IS NULL 
+            AND u.deletedAt IS NULL
+            AND u.center_id = :centerId
+            AND ui.createdAt >= :startOfMonth
+        `,
+            {
+              replacements: { centerId, iqaId, startOfMonth },
+              type: sequelize.QueryTypes.SELECT,
+            }
+          )
+          .then((r: any) => Number(r[0]?.count) || 0),
+
+        // Total signed off qualifications
+        sequelize
+          .query(
+            `
+          SELECT COUNT(*) as count 
+          FROM tbl_user_qualification uq 
+          INNER JOIN tbl_user u ON uq.user_id = u.id 
+          INNER JOIN tbl_user_iqa ui ON u.id = ui.user_id
+          WHERE uq.is_signed_off = true 
+            AND uq.deletedAt IS NULL 
+            AND u.center_id = :centerId 
+            AND u.deletedAt IS NULL
+            AND ui.iqa_id = :iqaId
+            AND ui.status = 1
+            AND ui.deletedAt IS NULL
+        `,
+            {
+              replacements: { centerId, iqaId },
+              type: sequelize.QueryTypes.SELECT,
+            }
+          )
+          .then((r: any) => Number(r[0]?.count) || 0),
+
+        // New signed off this month
+        sequelize
+          .query(
+            `
+          SELECT COUNT(*) as count 
+          FROM tbl_user_qualification uq 
+          INNER JOIN tbl_user u ON uq.user_id = u.id 
+          INNER JOIN tbl_user_iqa ui ON u.id = ui.user_id
+          WHERE uq.is_signed_off = true 
+            AND uq.deletedAt IS NULL 
+            AND u.center_id = :centerId 
+            AND u.deletedAt IS NULL
+            AND ui.iqa_id = :iqaId
+            AND ui.status = 1
+            AND ui.deletedAt IS NULL
+            AND uq.updatedAt >= :startOfMonth
+        `,
+            {
+              replacements: { centerId, iqaId, startOfMonth },
+              type: sequelize.QueryTypes.SELECT,
+            }
+          )
+          .then((r: any) => Number(r[0]?.count) || 0),
+      ]);
+
+      // ------------------ Batch 2: Get monthly data and activity ------------------
+      const [
+        monthlyApproveRejectData,
+        recentActivity,
+        activityRecordsModules,
+      ] = await Promise.all([
+        // Monthly assessment approve/reject data
+        sequelize.query(
+          `
+          SELECT 
+            DATE_FORMAT(a.updatedAt, '%Y-%m') as month,
+            SUM(CASE WHEN a.assessment_status = 6 THEN 1 ELSE 0 END) as approved,
+            SUM(CASE WHEN a.assessment_status = 3 THEN 1 ELSE 0 END) as rejected,
+            COUNT(a.id) as total_reviewed
+          FROM tbl_assessment a
+          INNER JOIN tbl_assessment_learner al ON a.id = al.assessment_id
+          INNER JOIN tbl_user_iqa ui ON al.learner_id = ui.user_id
+          WHERE a.center_id = :centerId
+            AND ui.iqa_id = :iqaId
+            AND ui.status = 1
+            AND ui.deletedAt IS NULL
+            AND a.deletedAt IS NULL
+            AND a.assessment_status IN (3, 6)
+            AND a.updatedAt >= :sixMonthsAgo
+          GROUP BY DATE_FORMAT(a.updatedAt, '%Y-%m')
+          ORDER BY month ASC
+        `,
+          {
+            replacements: { centerId, iqaId, sixMonthsAgo },
+            type: sequelize.QueryTypes.SELECT,
+          }
+        ),
+
+        // Recent activity for IQA and supervised learners
+        (async () => {
+          // Get all learners supervised by this IQA
+          const supervisedLearners = await UserIQA.findAll({
+            where: {
+              iqa_id: iqaId,
+              status: 1,
+              deletedAt: null,
+            } as any,
+            attributes: ["user_id"],
+          });
+
+          const learnerIds = supervisedLearners.map((ui) => ui.user_id);
+          
+          // Include both IQA's activities and supervised learners' activities
+          const userIdsForActivity = [iqaId, ...learnerIds];
+
+          return Activity.findAll({
+            where: {
+              center_id: centerId,
+              user_id: { [Op.in]: userIdsForActivity },
+            },
+            include: {
+              model: User,
+              as: "user",
+              attributes: ["id", "name", "surname", "email"],
+            },
+            order: [["createdAt", "DESC"]],
+            limit: 10,
+          });
+        })(),
+
+        // Activity records modules
+        (async () => {
+          // Get all learners supervised by this IQA
+          const supervisedLearners = await UserIQA.findAll({
+            where: {
+              iqa_id: iqaId,
+              status: 1,
+              deletedAt: null,
+            } as any,
+            attributes: ["user_id"],
+          });
+
+          const learnerIds = supervisedLearners.map((ui) => ui.user_id);
+
+          // Return empty array if no learners are supervised
+          if (learnerIds.length === 0) {
+            return [];
+          }
+
+          // Get qualifications of all supervised learners
+          const userQualifications = await UserQualification.findAll({
+            where: {
+              user_id: { [Op.in]: learnerIds },
+              status: 1,
+              deletedAt: null,
+            },
+            attributes: ["qualification_id"],
+          });
+
+          const qualificationIds = [
+            ...new Set(userQualifications.map((uq) => uq.qualification_id)),
+          ];
+
+          const moduleAccessConditions = [];
+
+          // Progress Review and Library modules
+          moduleAccessConditions.push({
+            module_type: {
+              [Op.in]: [ModuleTypes.PROGRESS_REVIEW, ModuleTypes.LIBRARY],
+            },
+          });
+
+          // Qualification-type modules - Fixed SQL injection
+          if (qualificationIds.length > 0) {
+            const moduleRecordsQualifications = await sequelize.query(
+              `
+              SELECT DISTINCT module_records_id 
+              FROM tbl_module_records_qualification 
+              WHERE qualification_id IN (:qualificationIds)
+                AND deletedAt IS NULL
+            `,
+              {
+                replacements: { qualificationIds },
+                type: sequelize.QueryTypes.SELECT,
+              }
+            );
+
+            const moduleRecordsIds = moduleRecordsQualifications.map(
+              (mrq: any) => mrq.module_records_id
+            );
+
+            if (moduleRecordsIds.length > 0) {
+              moduleAccessConditions.push({
+                [Op.and]: [
+                  { is_learner_or_qualification: 2 },
+                  { id: { [Op.in]: moduleRecordsIds } },
+                ],
+              });
+            }
+          }
+
+          return ModuleRecords.findAll({
+            where: {
+              deletedAt: null,
+              center_id: centerId,
+              [Op.or]: moduleAccessConditions,
+            },
+            include: {
+              model: Image,
+              as: "images_module_records",
+              attributes: [
+                "id",
+                "image",
+                "image_type",
+                "image_name",
+                "image_size",
+              ],
+            },
+            order: [["createdAt", "DESC"]],
+            limit: 10,
+          });
+        })(),
+      ]);
+
+      // ------------------ Calculations ------------------
+      // Change values now represent actual counts instead of percentages
+      const qualificationChange = newQualificationsThisMonth;
+      const samplingChange = newSamplingThisMonth;
+      const learnerChange = newLearnersThisMonth;
+      const signedOffChange = newSignedOffThisMonth;
+
+      // Prepare monthly overview for chart
+      const monthlyOverview: any[] = [];
+      const monthNames = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
+
+      // Generate last 6 months of data
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date();
+        date.setMonth(date.getMonth() - i);
+        const monthKey = `${date.getFullYear()}-${String(
+          date.getMonth() + 1
+        ).padStart(2, "0")}`;
+        const monthData = (monthlyApproveRejectData as any[]).find(
+          (m) => m.month === monthKey
+        ) as any;
+        
+        monthlyOverview.push({
+          month: monthNames[date.getMonth()],
+          approved: monthData ? Number(monthData.approved) : 0,
+          rejected: monthData ? Number(monthData.rejected) : 0,
+          totalReviewed: monthData ? Number(monthData.total_reviewed) : 0,
+        });
+      }
+
+      // ------------------ Final Response ------------------
+      return {
+        status: STATUS_CODES.SUCCESS,
+        message: STATUS_MESSAGE.DASHBOARD.DASHBOARD_DATA,
+        data: {
+          overview: {
+            numberOfQualifications: {
+              value: totalQualifications,
+              change: qualificationChange,
+              note: `${newQualificationsThisMonth} added recently`,
+            },
+            numberOfSampling: {
+              value: totalSampling,
+              change: samplingChange,
+              note: `${newSamplingThisMonth} new sampling this month`,
+            },
+            numberOfLearner: {
+              value: totalLearners,
+              change: learnerChange,
+              note: `${newLearnersThisMonth} new learners this month`,
+            },
+            numberOfSignedOff: {
+              value: totalSignedOff,
+              change: signedOffChange,
+              note: `${newSignedOffThisMonth} signed off this month`,
+            },
+          },
+          monthlyOverviewAssessmentApproveReject: monthlyOverview,
+          activityFeed: recentActivity,
+          activityRecordsModules,
+        },
+      };
+    } catch (error) {
+      console.log(error);
+      return {
+        status: STATUS_CODES.SERVER_ERROR,
+        message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
+
+  // Contact Us
+  static async contactUs(data): Promise<any> {
+    try {
+      let isValidEmail_ = await isValidEmail(data.email) 
+      if (!isValidEmail_) {
+        return {
+          status: STATUS_CODES.CONFLICT,
+          message: "Invalid Email Address"
+        }
+      }
+      // Send Email to Customer
+      await emailService.sendContactUsCustomerEmail(
+        data.email,
+        data.name
+      )
+      // Send Email to Admin
+      await emailService.sendContactUsAdminEmail(
+        data.name,
+        data.email,
+        data.message
+      )
+      return {
+        status: STATUS_CODES.SUCCESS,
+        message: "Success"
+      }
     } catch (error) {
       console.log(error);
       return {
