@@ -6,13 +6,15 @@ import Qualifications from "../../database/schema/qualifications";
 import Units from "../../database/schema/units";
 import SubOutcomes from "../../database/schema/sub_outcomes";
 import OutcomeSubpoints from "../../database/schema/outcome_subpoints";
-import { Op, Order, Sequelize } from "sequelize";
+import { col, fn, Op, Order, Sequelize } from "sequelize";
 import { paginate, qualificationUserId, retryDatabaseOperation } from "../../helper/utils";
 import UserQualification from "../../database/schema/user_qualification";
 import Assessment from "../../database/schema/assessment";
 import AssessmentUnits from "../../database/schema/assessment_units";
 import UserUnits from "../../database/schema/user_units";
 import AssessmentMarks from "../../database/schema/assessment_marks";
+import Category from "../../database/schema/category";
+import MainOutcomes from "../../database/schema/main_outcomes";
 const { sequelize } = require("../../configs/database");
 
 class qualificationService {
@@ -48,6 +50,7 @@ class qualificationService {
       const transaction = await sequelize.transaction();
       try {
         if (!file || !file.buffer || file.size === 0) {
+          await transaction.rollback();
           return {
             status: STATUS_CODES.BAD_REQUEST,
             message: "Please upload a valid file.",
@@ -65,6 +68,7 @@ class qualificationService {
           attributes: ["id"],
         });
         if (validateQualificationNumber) {
+          await transaction.rollback();
           return {
             status: STATUS_CODES.BAD_REQUEST,
             message: "Qualification Number Already Exist",
@@ -72,6 +76,7 @@ class qualificationService {
         }
         // Validate extracted data
         if (!qualificationName || !qualificationNumber) {
+          await transaction.rollback();
           return {
             status: STATUS_CODES.BAD_REQUEST,
             message: "Qualification name or number is missing in the Excel file.",
@@ -87,13 +92,17 @@ class qualificationService {
         );
         // Unit Data processing logic
         for (const sheetName of workbook.SheetNames) {
-          if (!sheetName.toLowerCase().startsWith("unit")) continue;
+          // Skip the front page sheet and only process unit sheets
+          if (sheetName.toLowerCase() === "front page" || sheetName.toLowerCase() === "frontpage") continue;
           // Process each unit sheet
           const sheet = workbook.Sheets[sheetName];
           const unitNo = sheet["B1"]?.v?.toString().trim() || "";
           const unitName = sheet["B2"]?.v?.toString().trim() || "";
           const unitRefNo = sheet["B3"]?.v?.toString().trim() || "";
+          const category = sheet["B4"]?.v?.toString().trim() || "";
+          const isMandatory = (sheet["B5"]?.v?.toString().trim() || "") === "Yes" ? true : false;
           if (!unitRefNo) {
+            await transaction.rollback();
             return {
               status: STATUS_CODES.BAD_REQUEST,
               message: `Unit Reference Number is missing for unit ${unitNo}`,
@@ -106,10 +115,35 @@ class qualificationService {
           });
 
           if (existingUnit) {
+            await transaction.rollback();
             return {
               status: STATUS_CODES.BAD_REQUEST,
               message: `Unit Reference Number already exists: ${unitNo}`,
             };
+          }
+
+          // Check if category exists then get the id else create the category
+          let categoryId: number | null = null;
+          let categoryData = await Category.findOne({
+            where: {
+              category_name: {
+                [Op.like]: category
+              }
+            },
+            attributes: ["id", "is_mandatory"],
+          });
+          if (categoryData) {
+            if (categoryData.is_mandatory !== isMandatory) {
+              await transaction.rollback();
+              return {
+                status: STATUS_CODES.BAD_REQUEST,
+                message: "Category already exists but is mandatory is different. Please update the category mandatory status."
+              }
+            }
+            categoryId = categoryData.id;
+          } else {
+            categoryData = await Category.create({ category_name: category, is_mandatory: isMandatory }, { transaction });
+            categoryId = categoryData.id;
           }
           // create unit
           let unitData = await Units.create(
@@ -118,6 +152,7 @@ class qualificationService {
               unit_title: unitName,
               unit_number: unitNo,
               unit_ref_no: unitRefNo,
+              category_id: categoryId,
               created_by: userData.id,
             },
             { transaction }
@@ -125,20 +160,32 @@ class qualificationService {
           // Extract sub outcome data
           const range = XLSX.utils.decode_range(sheet["!ref"] || "");
           let currentSubOutcomeId: number | null = null;
-          for (let row = 4; row <= range.e.r; row++) {
+          let currentMainOutcomeId: number | null = null;
+          for (let row = 6; row <= range.e.r; row++) {
             const codeCell = sheet[XLSX.utils.encode_cell({ c: 0, r: row })];
             const descCell = sheet[XLSX.utils.encode_cell({ c: 1, r: row })];
 
             const code = codeCell?.v?.toString().trim();
             const description = descCell?.v?.toString().trim();
 
-            if (code && /^[0-9]+\.[0-9]+$/.test(code)) {
+            if (code && /^[0-9]+(\.0+)*$/.test(code)) {
+              // Create MainOutcome
+              const mainOutcome = await MainOutcomes.create({
+                unit_id: unitData.id,
+                qualification_id: qualificationData.id,
+                main_number: code,
+                description: description || "",
+                created_by: userData.id,
+              }, { transaction });
+              currentMainOutcomeId = mainOutcome.id;
+            } else if (code && /^[0-9]+\.[0-9]+$/.test(code)) {
               // Create SubOutcome
               const subOutCome = await SubOutcomes.create(
                 {
                   unit_id: unitData.id,
                   qualification_id: qualificationData.id,
                   description: description || "",
+                  main_outcome_id: currentMainOutcomeId,
                   outcome_number: code,
                   created_by: userData.id,
                 },
@@ -172,7 +219,7 @@ class qualificationService {
       } catch (error) {
         console.error("Error creating qualification:", error);
         // Rollback transaction in case of error
-        await transaction.rollback();
+        if (transaction) await transaction.rollback();
         return {
           status: STATUS_CODES.SERVER_ERROR,
           message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
@@ -314,22 +361,32 @@ class qualificationService {
         where: unitWhereCondition,
         include: [
           {
-            model: SubOutcomes,
-            as: "subOutcomes",
+            model: MainOutcomes,
+            as: "mainOutcomes",
             include: [
               {
-                model: OutcomeSubpoints,
-                as: "outcomeSubpoints",
-              },
-            ],
+                model: SubOutcomes,
+                as: "subOutcomes",
+                include: [
+                  {
+                    model: OutcomeSubpoints,
+                    as: "outcomeSubpoints",
+                  },
+                ],
+              }
+            ]
+          },
+          {
+            model: Category,
+            as: "category",
           },
         ],
         order: [
           ["unit_number", "ASC"],
-          [{ model: SubOutcomes, as: "subOutcomes" }, "outcome_number", "ASC"]
+          [{ model: MainOutcomes, as: "mainOutcomes" }, "main_number", "ASC"],
         ],
       });
-
+      
       // Early return if no units found
       if (!units || units.length === 0) {
         return {
@@ -360,81 +417,114 @@ class qualificationService {
       const result = {
         units: await Promise.all(units.map(async (unit) => {
           //@ts-ignore
-          const outcomes = await Promise.all((unit.subOutcomes || []).map(async (outcome) => {
-            // Parse outcome number
-            const [sectionNumber, outcomeNumber] = outcome.outcome_number.split(".");
-            const numericSection = parseInt(sectionNumber, 10).toString();
-            const numericOutcome = parseInt(outcomeNumber, 10).toString();
-            const fullOutcomeNumber = `${numericSection}.${numericOutcome}`;
-
-            // Build outcome entry
-            const outcomeEntry: any = {
-              number: fullOutcomeNumber,
-              description: outcome.description,
-              id: outcome.id,
+          const mainOutcomes = await Promise.all((unit.mainOutcomes || []).map(async (mainOutcome) => {
+            // Build main outcome entry
+            const mainOutcomeEntry: any = {
+              id: mainOutcome.id,
+              main_number: mainOutcome.main_number,
+              description: mainOutcome.description,
+              marks: mainOutcome.marks || "0",
             };
 
-            // Add outcome marks
+            // Add main outcome marks if learnerId is provided
             if (learnerId) {
-              const outcomeMarksData = await this.getOutcomeMarksFromAssessment(
-                outcome.id,
-                learnerId,
-                qualificationId,
-                assessmentId
-              );
-              outcomeEntry.outcome_marks = outcomeMarksData?.total_marks || "0";
-              outcomeEntry.max_outcome_marks = outcomeMarksData?.max_marks || outcome.marks || "0";
+              // You might want to add logic here to get main outcome marks if needed
+              // For now, we'll use the default marks from the main outcome
+              mainOutcomeEntry.outcome_marks = "0";
+              mainOutcomeEntry.max_outcome_marks = mainOutcome.marks || "0";
             } else {
-              outcomeEntry.outcome_marks = "0";
-              outcomeEntry.max_outcome_marks = outcome.marks || "0";
+              mainOutcomeEntry.outcome_marks = "0";
+              mainOutcomeEntry.max_outcome_marks = mainOutcome.marks || "0";
             }
 
-            // Add subpoints if they exist
-            if (outcome.outcomeSubpoints && outcome.outcomeSubpoints.length) {
-              // Keep existing subPoints for backward compatibility
-              outcomeEntry.subPoints = outcome.outcomeSubpoints.map(p => p.point_text);
+            // Process sub outcomes for this main outcome
+            const subOutcomes = await Promise.all((mainOutcome.subOutcomes || []).map(async (subOutcome) => {
+              // Parse outcome number
+              const [sectionNumber, outcomeNumber] = subOutcome.outcome_number.split(".");
+              const numericSection = parseInt(sectionNumber, 10).toString();
+              const numericOutcome = parseInt(outcomeNumber, 10).toString();
+              const fullOutcomeNumber = `${numericSection}.${numericOutcome}`;
 
-              // Add new sub_points with marks (parallel processing)
+              // Build sub outcome entry
+              const subOutcomeEntry: any = {
+                number: fullOutcomeNumber,
+                description: subOutcome.description,
+                id: subOutcome.id,
+              };
+
+              // Add sub outcome marks
               if (learnerId) {
-                outcomeEntry.sub_points = await Promise.all(
-                  outcome.outcomeSubpoints.map(async (p) => {
-                    const latestMarkData = await this.getLatestAssessmentMark(
-                      p.id,
-                      learnerId,
-                      qualificationId,
-                      assessmentId
-                    );
-
-                    return {
-                      id: p.id,
-                      point_text: p.point_text,
-                      mark: latestMarkData?.marks || "0",
-                      max_marks: latestMarkData?.max_marks || p.marks || "0"
-                    };
-                  })
+                const outcomeMarksData = await this.getOutcomeMarksFromAssessment(
+                  subOutcome.id,
+                  learnerId,
+                  qualificationId,
+                  assessmentId
                 );
+                subOutcomeEntry.outcome_marks = outcomeMarksData?.total_marks || "0";
+                subOutcomeEntry.max_outcome_marks = outcomeMarksData?.max_marks || subOutcome.marks || "0";
               } else {
-                outcomeEntry.sub_points = outcome.outcomeSubpoints.map((p) => ({
-                  id: p.id,
-                  point_text: p.point_text,
-                  mark: "0",
-                  max_marks: p.marks || "0"
-                }));
+                subOutcomeEntry.outcome_marks = "0";
+                subOutcomeEntry.max_outcome_marks = subOutcome.marks || "0";
               }
-            }
 
-            return outcomeEntry;
+              // Add subpoints if they exist
+              if (subOutcome.outcomeSubpoints && subOutcome.outcomeSubpoints.length) {
+                // Keep existing subPoints for backward compatibility
+                subOutcomeEntry.subPoints = subOutcome.outcomeSubpoints.map(p => p.point_text);
+
+                // Add new sub_points with marks (parallel processing)
+                if (learnerId) {
+                  subOutcomeEntry.sub_points = await Promise.all(
+                    subOutcome.outcomeSubpoints.map(async (p) => {
+                      const latestMarkData = await this.getLatestAssessmentMark(
+                        p.id,
+                        learnerId,
+                        qualificationId,
+                        assessmentId
+                      );
+
+                      return {
+                        id: p.id,
+                        point_text: p.point_text,
+                        mark: latestMarkData?.marks || "0",
+                        max_marks: latestMarkData?.max_marks || p.marks || "0"
+                      };
+                    })
+                  );
+                } else {
+                  subOutcomeEntry.sub_points = subOutcome.outcomeSubpoints.map((p) => ({
+                    id: p.id,
+                    point_text: p.point_text,
+                    mark: "0",
+                    max_marks: p.marks || "0"
+                  }));
+                }
+              }
+
+              return subOutcomeEntry;
+            }));
+
+            // Sort sub outcomes
+            subOutcomes.sort((a, b) => this.compareOutcomeNumbers(a.number, b.number));
+
+            // Add sub outcomes to main outcome
+            mainOutcomeEntry.sub_outcomes = subOutcomes;
+
+            return mainOutcomeEntry;
           }));
 
-          // Sort outcomes
-          outcomes.sort((a, b) => this.compareOutcomeNumbers(a.number, b.number));
+          // Sort main outcomes
+          mainOutcomes.sort((a, b) => a.main_number.localeCompare(b.main_number));
 
           return {
             id: unit.id,
             unitTitle: unit.unit_title,
             unitNumber: unit.unit_number,
+            category: unit.category?.category_name || null,
+            category_id: unit.category?.id || null,
+            is_mandatory: unit.category?.is_mandatory || false,
             unit_number: unit.unit_number,
-            outcomes,
+            main_outcomes: mainOutcomes,
             isSampling: learnerId ? Boolean(samplingMap.get(unit.id)) : false
           };
         }))
@@ -718,6 +808,13 @@ class qualificationService {
         };
       }
 
+      // Delete previous main outcomes
+      await MainOutcomes.destroy({
+        where: { qualification_id: qualificationId },
+        force: true,
+        transaction,
+      });
+
       // Delete previous related data (force delete)
       await OutcomeSubpoints.destroy({
         where: {
@@ -812,19 +909,44 @@ class qualificationService {
     }
 
     for (const sheetName of workbook.SheetNames) {
-      if (!sheetName.toLowerCase().startsWith("unit")) continue;
+      // if (!sheetName.toLowerCase().startsWith("unit")) continue;
+      if (sheetName.toLowerCase() === "front page" || sheetName.toLowerCase() === "frontpage") continue;
       const sheet = workbook.Sheets[sheetName];
 
       const unitNo = sheet["B1"]?.v?.toString().trim() || "";
       const unitName = sheet["B2"]?.v?.toString().trim() || "";
       const unitRefNo = sheet["B3"]?.v?.toString().trim() || "";
+      const category = sheet["B4"]?.v?.toString().trim() || "";
+      const isMandatory = (sheet["B5"]?.v?.toString().trim() || "") === "Yes" ? true : false;
 
+      let categoryId: number | null = null;
+      let categoryData = await Category.findOne({
+        where: {
+          category_name: {
+            [Op.like]: category
+          }
+        },
+      });
+      if (categoryData) {
+        if (categoryData.is_mandatory !== isMandatory) {
+          await transaction.rollback();
+          return {
+            status: STATUS_CODES.BAD_REQUEST,
+            message: "Category already exists but is mandatory is different. Please update the category mandatory status."
+          }
+        }
+        categoryId = categoryData.id;
+      } else {
+        categoryData = await Category.create({ category_name: category, is_mandatory: isMandatory }, { transaction });
+        categoryId = categoryData.id;
+      }
       const unitData = await Units.create(
         {
           qualification_id: qualificationData.id,
           unit_title: unitName,
           unit_number: unitNo,
           unit_ref_no: unitRefNo,
+          category_id: categoryId,
           created_by: userData.id,
         },
         { transaction }
@@ -832,15 +954,24 @@ class qualificationService {
 
       const range = XLSX.utils.decode_range(sheet["!ref"] || "");
       let currentSubOutcomeId: number | null = null;
-
-      for (let row = 4; row <= range.e.r; row++) {
+      let currentMainOutcomeId: number | null = null;
+      for (let row = 6; row <= range.e.r; row++) {
         const codeCell = sheet[XLSX.utils.encode_cell({ c: 0, r: row })];
         const descCell = sheet[XLSX.utils.encode_cell({ c: 1, r: row })];
 
         const code = codeCell?.v?.toString().trim();
         const description = descCell?.v?.toString().trim();
 
-        if (code && /^[0-9]+\.[0-9]+$/.test(code)) {
+        if (code && /^[0-9]+(\.0+)*$/.test(code)) {
+          const mainOutcome = await MainOutcomes.create({
+            unit_id: unitData.id,
+            qualification_id: qualificationData.id,
+            main_number: code,
+            description: description || "",
+            created_by: userData.id,
+          }, { transaction });
+          currentMainOutcomeId = mainOutcome.id;
+        } else if (code && /^[0-9]+\.[0-9]+$/.test(code)) {
           const subOutCome = await SubOutcomes.create(
             {
               unit_id: unitData.id,
@@ -848,6 +979,7 @@ class qualificationService {
               description: description || "",
               outcome_number: code,
               created_by: userData.id,
+              main_outcome_id: currentMainOutcomeId,
             },
             { transaction }
           );

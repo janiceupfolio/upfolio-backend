@@ -4,6 +4,7 @@ export interface UnitsInterface {
   unit_title: string;
   unit_number: string;
   unit_ref_no: string;
+  category_id: number;
   marks: string;
   status: number; // 1: Active, 2: Inactive
   created_by: number;

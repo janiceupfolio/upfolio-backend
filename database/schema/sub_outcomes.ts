@@ -5,6 +5,7 @@ import BaseModel from "./base";
 import { TABLE_NAME } from "../../configs/tables";
 import { SubOutcomesInterface } from "../../interface/sub_outcomes";
 import OutcomeSubpoints from "./outcome_subpoints";
+import MainOutcomes from "./main_outcomes";
 
 class SubOutcomes extends Model<SubOutcomesInterface> implements SubOutcomesInterface {
   public id!: number;
