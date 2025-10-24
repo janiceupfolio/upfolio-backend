@@ -25,6 +25,7 @@ import AssessmentMarks from "../../database/schema/assessment_marks";
 import OutcomeSubpoints from "../../database/schema/outcome_subpoints";
 import SubOutcomes from "../../database/schema/sub_outcomes";
 import Units from "../../database/schema/units";
+import { TABLE_NAME } from "../../configs/tables";
 const { sequelize } = require("../../configs/database");
 
 class MasterService {
@@ -2107,6 +2108,37 @@ class MasterService {
         status: STATUS_CODES.SUCCESS,
         message: "Success"
       }
+    } catch (error) {
+      console.log(error);
+      return {
+        status: STATUS_CODES.SERVER_ERROR,
+        message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
+
+  // Clean Database
+  static async cleanDatabase(): Promise<any> {
+    try {
+      await sequelize.query("SET FOREIGN_KEY_CHECKS = 0;");
+      for (const tableName of Object.values(TABLE_NAME)) {
+        if (tableName === TABLE_NAME.USER) {
+          // name of Janice, Urmil and Amit should not be deleted
+          await sequelize.query(`
+            DELETE FROM ${tableName}
+            WHERE name NOT IN ('Janice', 'Urmil', 'Amit');
+          `);
+          continue;
+        }
+        const skipTables = [TABLE_NAME.ROLE, TABLE_NAME.METHODS];
+        if (skipTables.includes(tableName)) continue;
+        await sequelize.query(`TRUNCATE TABLE ${tableName};`);
+      }
+      await sequelize.query("SET FOREIGN_KEY_CHECKS = 1;");
+      return {
+        status: STATUS_CODES.SUCCESS,
+        message: "Success",
+      };
     } catch (error) {
       console.log(error);
       return {
