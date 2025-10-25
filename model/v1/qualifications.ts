@@ -1004,6 +1004,159 @@ class qualificationService {
 
     return qualificationData;
   }
+
+  static async getCategoryByQualification(
+    qualificationId: number | string,
+    userData: userAuthenticationData,
+    learnerId?: number | string,
+    assessmentId?: number | string
+  ): Promise<any> {
+    try {
+      // Build unit where condition
+      let unitWhereCondition: any = {
+        qualification_id: qualificationId
+      };
+
+      // Fetch assessment units if assessmentId is provided
+      if (assessmentId) {
+        const assessmentData = await AssessmentUnits.findAll({
+          where: { assessment_id: assessmentId },
+          attributes: ['unit_id'],
+          raw: true
+        });
+
+        const unitIds = assessmentData.map((item) => item.unit_id);
+        if (unitIds.length > 0) {
+          unitWhereCondition.id = unitIds;
+        }
+      }
+
+      // Fetch units with nested relationships in one query
+      const units = await Units.findAll({
+        where: unitWhereCondition,
+        include: [
+          {
+            model: MainOutcomes,
+            as: "mainOutcomes",
+            include: [
+              {
+                model: SubOutcomes,
+                as: "subOutcomes",
+                include: [
+                  {
+                    model: OutcomeSubpoints,
+                    as: "outcomeSubpoints",
+                  },
+                ],
+              }
+            ]
+          },
+          {
+            model: Category,
+            as: "category",
+          },
+        ],
+        order: [
+          ["unit_number", "ASC"],
+          [{ model: MainOutcomes, as: "mainOutcomes" }, "main_number", "ASC"],
+        ],
+      });
+      
+      // Early return if no units found
+      if (!units || units.length === 0) {
+        return {
+          status: STATUS_CODES.SUCCESS,
+          data: { units: [] },
+          message: "Qualifications retrieved successfully.",
+        };
+      }
+
+      // Batch fetch sampling data if learnerId is provided
+      let samplingMap = new Map();
+      if (learnerId) {
+        const unitIds = units.map(unit => unit.id);
+        const samplingData = await UserUnits.findAll({
+          where: {
+            unit_id: unitIds,
+            user_id: learnerId
+          },
+          attributes: ["unit_id", "is_sampling"],
+          raw: true
+        });
+        samplingData.forEach(item => {
+          samplingMap.set(item.unit_id, item.is_sampling);
+        });
+      }
+      const formattedUnits = units.map(unit => ({
+      id: unit.id,
+      unitTitle: unit.unit_title,
+      unitNumber: unit.unit_number,
+      is_mandatory: !!unit.category.is_mandatory,
+      isSampling: !!samplingMap.get(unit.id),
+      // @ts-ignore
+      main_outcomes: unit.mainOutcomes.map(main => ({
+        id: main.id,
+        main_number: main.main_number,
+        description: main.description,
+        marks: main.marks || "0",
+        outcome_marks: main.outcome_marks || "0",
+        max_outcome_marks: main.max_outcome_marks || "0",
+        sub_outcomes: main.subOutcomes.map(sub => ({
+          id: sub.id,
+          number: sub.number,
+          description: sub.description,
+          outcome_marks: sub.outcome_marks || "0",
+          max_outcome_marks: sub.max_outcome_marks || "0",
+          sub_points: sub.outcomeSubpoints?.map(point => ({
+            id: point.id,
+            point_text: point.point_text,
+            mark: point.mark || "0",
+            max_marks: point.max_marks || "0",
+          })) || [],
+        })),
+      })),
+      category_id: unit.category?.id || null,
+      category: unit.category?.category_name || "Uncategorized",
+    }));
+
+    // Step 5: Group by category
+    const categoryMap = new Map<number, any>();
+
+    for (const unit of formattedUnits) {
+      const catId = unit.category_id || 0;
+      if (!categoryMap.has(catId)) {
+        categoryMap.set(catId, {
+          category_id: catId,
+          category: unit.category,
+          units: [],
+        });
+      }
+      categoryMap.get(catId).units.push({
+        id: unit.id,
+        unitTitle: unit.unitTitle,
+        unitNumber: unit.unitNumber,
+        is_mandatory: unit.is_mandatory,
+        isSampling: unit.isSampling,
+        main_outcomes: unit.main_outcomes,
+      });
+    }
+
+    const result = Array.from(categoryMap.values());
+
+    // Step 6: Return final grouped response
+    return {
+      status: STATUS_CODES.SUCCESS,
+      data: result,
+      message: "Qualification categories and units retrieved successfully.",
+    };
+    } catch (error) {
+      console.error("Error retrieving qualifications:", error);
+      return {
+        status: STATUS_CODES.SERVER_ERROR,
+        message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
 }
 
 export default qualificationService;

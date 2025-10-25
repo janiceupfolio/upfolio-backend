@@ -56,6 +56,35 @@ class qualificationController {
     }
   }
 
+  // Get Category By Qualification
+  static async getCategoryByQualification(req: Request, res: Response): Promise<void> {
+    try {
+      let qualificationId = req.params.id as number | string;
+      let assessmentId = req.query.assessment_id as number | string;
+      let userData = req.headers["user_info"] as userAuthenticationData;
+      let learnerId = req.query.learner_id as number | string;
+      
+      let request = await qualificationService.getCategoryByQualification(
+        qualificationId,
+        userData,
+        learnerId,
+        assessmentId
+      );
+      if (request.status !== STATUS_CODES.SUCCESS) {
+        res.handler.errorResponse(request.status, request.message);
+        return;
+      }
+      res.handler.successResponse(
+        request.status,
+        request.data,
+        request.message
+      );
+    } catch (error) {
+      error = "server error";
+      res.handler.serverError(error);
+    }
+  }
+
   // Get qualifications list method
   static async getQualificationsList(
     req: Request,

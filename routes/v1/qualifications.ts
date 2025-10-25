@@ -15,6 +15,11 @@ router
   .route("/detail/:id")
   .get(authenticateUser, qualificationController.getQualifications);
 
+// Get qualification route
+router
+  .route("/detail/category/:id")
+  .get(authenticateUser, qualificationController.getCategoryByQualification)
+
 // Get qualifications list
 router
   .route("/list")
