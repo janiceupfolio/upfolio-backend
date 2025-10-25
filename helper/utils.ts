@@ -10,6 +10,7 @@ import {
   CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand,
   ListPartsCommand,
+  ObjectCannedACL
 } from "@aws-sdk/client-s3";
 import NodeCache from "node-cache";
 import { userAuthenticationData } from "../interface/user";
@@ -157,6 +158,35 @@ export const uploadFileOnAWS = async (
     return ""; // Return an empty string on error
   }
 };
+
+// upload file downloadable
+export const uploadFileOnAWSDownloadable = async (
+  file: any,
+  customFileName: string
+): Promise<string> => {
+  try {
+    const fileName = customFileName || file.originalname;
+    const key = `qualification/${fileName}`
+
+    const params = {
+      Bucket: process.env.AWS_BUCKET!,
+      Key: key,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+      // ACL: ObjectCannedACL.public_read,
+      ContentDisposition: `attachment; filename="${fileName}"`, // 👈 Force download
+    };
+
+    await s3Client.send(new PutObjectCommand(params));
+
+    const fileUrl = `https://${process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION_NAME}.amazonaws.com/${fileName}`;
+    return fileUrl;
+  } catch (error) {
+    console.error("Error uploading file to AWS S3:", error);
+    return "";
+  }
+};
+
 
 // Delete File on AWS
 export const deleteFileOnAWS = async (file: string): Promise<boolean> => {

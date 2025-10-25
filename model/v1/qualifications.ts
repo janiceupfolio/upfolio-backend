@@ -7,7 +7,7 @@ import Units from "../../database/schema/units";
 import SubOutcomes from "../../database/schema/sub_outcomes";
 import OutcomeSubpoints from "../../database/schema/outcome_subpoints";
 import { col, fn, Op, Order, Sequelize } from "sequelize";
-import { paginate, qualificationUserId, retryDatabaseOperation } from "../../helper/utils";
+import { paginate, qualificationUserId, retryDatabaseOperation, uploadFileOnAWSDownloadable } from "../../helper/utils";
 import UserQualification from "../../database/schema/user_qualification";
 import Assessment from "../../database/schema/assessment";
 import AssessmentUnits from "../../database/schema/assessment_units";
@@ -15,6 +15,7 @@ import UserUnits from "../../database/schema/user_units";
 import AssessmentMarks from "../../database/schema/assessment_marks";
 import Category from "../../database/schema/category";
 import MainOutcomes from "../../database/schema/main_outcomes";
+import { extname } from "path";
 const { sequelize } = require("../../configs/database");
 
 class qualificationService {
@@ -209,6 +210,14 @@ class qualificationService {
             }
           }
         }
+        // upload file on AWS
+        const extension = extname(file.originalname);
+        const fileName = qualificationName.replace(/\s+/g, "-")
+        const mainFileName = `${fileName}${extension}`;
+        let qualification_file = await uploadFileOnAWSDownloadable(file, mainFileName)
+        // update in database
+        qualificationData.qualification_file = qualification_file
+        await Qualifications.update({ qualification_file }, { where: { id: qualificationData.id }, transaction })
         // Commit transaction
         await transaction.commit();
         return {
@@ -861,7 +870,13 @@ class qualificationService {
         transaction,
         qualificationData.id
       );
-
+      // upload file on AWS
+      const extension = extname(file.originalname);
+      const fileName = qualificationName.replace(/\s+/g, "-")
+      const mainFileName = `${fileName}${extension}`;
+      let qualification_file = await uploadFileOnAWSDownloadable(file, mainFileName)
+      // update in database
+      await Qualifications.update({ qualification_file }, { where: { id: qualificationData.id }, transaction })
       await transaction.commit();
       return {
         status: STATUS_CODES.SUCCESS,
