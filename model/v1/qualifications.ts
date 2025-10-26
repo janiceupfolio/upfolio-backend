@@ -870,7 +870,7 @@ class qualificationService {
         transaction,
         qualificationData.id
       );
-      if (created.status && created.status !== 200) {
+      if (created && created.status && created.status !== 200) {
         await transaction.rollback()
         return {
           status: created.status,
@@ -887,7 +887,7 @@ class qualificationService {
       await transaction.commit();
       return {
         status: STATUS_CODES.SUCCESS,
-        data: created,
+        data: created.data,
         message: "Qualification updated successfully.",
       };
     } catch (error) {
@@ -1024,7 +1024,11 @@ class qualificationService {
       }
     }
 
-    return qualificationData;
+    return {
+      status: STATUS_CODES.SUCCESS,
+      message: "Success",
+      data: qualificationData
+    };
   }
 
   static async getCategoryByQualification(
