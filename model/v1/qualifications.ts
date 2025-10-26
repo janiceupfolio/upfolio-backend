@@ -870,7 +870,7 @@ class qualificationService {
         transaction,
         qualificationData.id
       );
-      if (created.status !== 200) {
+      if (created.status && created.status !== 200) {
         await transaction.rollback()
         return {
           status: created.status,
