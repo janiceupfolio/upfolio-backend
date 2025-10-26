@@ -179,7 +179,7 @@ export const uploadFileOnAWSDownloadable = async (
 
     await s3Client.send(new PutObjectCommand(params));
 
-    const fileUrl = `https://${process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION_NAME}.amazonaws.com/${fileName}`;
+    const fileUrl = `https://${process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION_NAME}.amazonaws.com/${key}`;
     return fileUrl;
   } catch (error) {
     console.error("Error uploading file to AWS S3:", error);

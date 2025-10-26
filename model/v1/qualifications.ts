@@ -870,9 +870,16 @@ class qualificationService {
         transaction,
         qualificationData.id
       );
+      if (created.status !== 200) {
+        await transaction.rollback()
+        return {
+          status: created.status,
+          message: created.message
+        }
+      }
       // upload file on AWS
       const extension = extname(file.originalname);
-      const fileName = qualificationName.replace(/\s+/g, "-")
+      const fileName = qualificationName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "");
       const mainFileName = `${fileName}${extension}`;
       let qualification_file = await uploadFileOnAWSDownloadable(file, mainFileName)
       // update in database
@@ -884,8 +891,8 @@ class qualificationService {
         message: "Qualification updated successfully.",
       };
     } catch (error) {
-      await transaction.rollback();
       console.error("Error updating qualification:", error);
+      if (!transaction.finished) await transaction.rollback();
       return {
         status: STATUS_CODES.SERVER_ERROR,
         message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
@@ -944,7 +951,7 @@ class qualificationService {
       });
       if (categoryData) {
         if (categoryData.is_mandatory !== isMandatory) {
-          await transaction.rollback();
+          // await transaction.rollback();
           return {
             status: STATUS_CODES.BAD_REQUEST,
             message: "Category already exists but is mandatory is different. Please update the category mandatory status."
