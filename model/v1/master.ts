@@ -2126,7 +2126,7 @@ class MasterService {
           // name of Janice, Urmil and Amit should not be deleted
           await sequelize.query(`
             DELETE FROM ${tableName}
-            WHERE name NOT IN ('Janice', 'Urmil', 'Amit');
+            WHERE name NOT IN ('Janice', 'Urmil', 'Amit') AND role = 1;
           `);
           continue;
         }

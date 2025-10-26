@@ -928,6 +928,7 @@ class qualificationService {
         },
         { transaction }
       );
+      existingQualificationId = qualificationData.id
     }
 
     for (const sheetName of workbook.SheetNames) {
