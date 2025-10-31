@@ -849,6 +849,72 @@ class LearnerService {
       };
     }
   }
+
+  // Qualification List
+  static async qualificationList(data: any, userData: userAuthenticationData) {
+    try {
+      let qualificationData = await Qualifications.findOne({
+        where: { id: data.qualification_id, deletedAt: null },
+      });
+      if (!qualificationData) {
+        return {
+          status: STATUS_CODES.BAD_REQUEST,
+          message: "Qualification not found",
+        };
+      }
+      // Get User Qualifications
+      let userQualification = await UserQualification.findOne({
+        where: { qualification_id: qualificationData.id, user_id: data.learner_id, deletedAt: null },
+        attributes: ["is_signed_off", "is_optional_assigned"],
+      });
+      // Qualification Units and User Units
+      let units = await Units.findAll({
+        where: { qualification_id: qualificationData.id, deletedAt: null },
+        attributes: ["id", "unit_title", "unit_number", "category_id"],
+        include: [
+          {
+            model: Category,
+            as: "category",
+            attributes: ["id", "category_name"],
+          },
+        ],
+      });
+      let userUnits = await UserUnits.findAll({
+        where: { user_id: data.learner_id, unit_id: { [Op.in]: units.map((unit: any) => unit.id) }, deletedAt: null },
+        attributes: ["id", "is_assigned", "unit_id"],
+      });
+      let unitMap = new Map();
+      units.forEach((unit: any) => {
+        unitMap.set(unit.id, {
+          unit_id: unit.id,
+          unit_title: unit.unit_title,
+          unit_number: unit.unit_number,
+          category_id: unit.category_id,
+          category_name: unit.category?.category_name || null,
+          is_assigned: userUnits.some((userUnit: any) => userUnit.unit_id == unit.id && userUnit.is_assigned) || false,
+        });
+      });
+      let responseObject = {
+        qualification_id: qualificationData.id,
+        qualification_name: qualificationData.name,
+        qualification_no: qualificationData.qualification_no,
+        is_signed_off: userQualification?.is_signed_off || false,
+        is_optional_assigned: userQualification?.is_optional_assigned || false,
+        units: Array.from(unitMap.values()),
+      }
+      return {
+        status: STATUS_CODES.SUCCESS,
+        data: responseObject,
+        message: "Qualification list fetched successfully",
+      };
+    } catch (error) {
+      console.log(error);
+      return {
+        status: STATUS_CODES.SERVER_ERROR,
+        message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
 }
 
 export default LearnerService;

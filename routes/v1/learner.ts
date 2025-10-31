@@ -1,6 +1,6 @@
 import express from "express";
 const router = express.Router();
-import { body } from "express-validator";
+import { body, query } from "express-validator";
 import validate from "../../middleware/validator/validator";
 import { Authenticator } from "../../middleware/authenticator/authenticator";
 import learnerController from "../../controller/v1/learner";
@@ -119,6 +119,15 @@ router.route("/assign-status/:id").put(
   ]),
   authenticateUser,
   learnerController.assignStatusLearner
+);
+
+router.route("/qualification-list").get(
+  validate([
+    query("qualification_id").notEmpty().withMessage("Qualification ID is required"),
+    query("learner_id").notEmpty().withMessage("Learner ID is required"),
+  ]),
+  authenticateUser,
+  learnerController.qualificationList
 );
 
 export default router;
