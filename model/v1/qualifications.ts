@@ -430,11 +430,11 @@ class qualificationService {
             unit_id: unitIds,
             user_id: learnerId
           },
-          attributes: ["unit_id", "is_sampling"],
+          attributes: ["unit_id", "is_sampling", "is_assigned"],
           raw: true
         });
         samplingData.forEach(item => {
-          samplingMap.set(item.unit_id, item.is_sampling);
+          samplingMap.set(item.unit_id, { is_sampling: item.is_sampling, is_assigned: item.is_assigned });
         });
       }
 
@@ -550,7 +550,8 @@ class qualificationService {
             is_mandatory: unit.category?.is_mandatory || false,
             unit_number: unit.unit_number,
             main_outcomes: mainOutcomes,
-            isSampling: learnerId ? Boolean(samplingMap.get(unit.id)) : false
+            isSampling: learnerId ? Boolean(samplingMap.get(unit.id)?.is_sampling) : false,
+            is_assigned: learnerId ? Boolean(samplingMap.get(unit.id)?.is_assigned) : false,
           };
         }))
       };
@@ -1159,11 +1160,11 @@ class qualificationService {
             unit_id: unitIds,
             user_id: learnerId
           },
-          attributes: ["unit_id", "is_sampling"],
+          attributes: ["unit_id", "is_sampling", "is_assigned"],
           raw: true
         });
         samplingData.forEach(item => {
-          samplingMap.set(item.unit_id, item.is_sampling);
+          samplingMap.set(item.unit_id, { is_sampling: item.is_sampling, is_assigned: item.is_assigned });
         });
       }
       const formattedUnits = units.map(unit => ({
@@ -1171,7 +1172,8 @@ class qualificationService {
       unitTitle: unit.unit_title,
       unitNumber: unit.unit_number,
       is_mandatory: !!unit.category.is_mandatory,
-      isSampling: !!samplingMap.get(unit.id),
+      isSampling: !!samplingMap.get(unit.id)?.is_sampling,
+      is_assigned: !!samplingMap.get(unit.id)?.is_assigned,
       // @ts-ignore
       main_outcomes: unit.mainOutcomes.map(main => ({
         id: main.id,
@@ -1216,6 +1218,7 @@ class qualificationService {
         unitNumber: unit.unitNumber,
         is_mandatory: unit.is_mandatory,
         isSampling: unit.isSampling,
+        is_assigned: unit.is_assigned,
         main_outcomes: unit.main_outcomes,
       });
     }
