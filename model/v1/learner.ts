@@ -338,15 +338,40 @@ class LearnerService {
             qualification_id: { [Op.in]: qualificationIds },
           },
         });
-        const units = units_.map((unit) => unit.id);
-        // Insert new units
+        const categoryIds = units_.map((unit) => unit.category_id);
+        const validCategories = await Category.findAll({
+          where: { id: { [Op.in]: categoryIds } },
+          attributes: ["id", "is_mandatory"],
+        });
+        const categoryMap: Record<number, boolean> = validCategories.reduce(
+          (acc, category) => {
+            acc[category.id] = category.is_mandatory;
+            return acc;
+          }, {}
+        );
+        // Update units
         await UserUnits.bulkCreate(
-          units.map((unitId) => ({
+          units_.map((unit) => ({
             user_id: +learnerId,
-            unit_id: unitId,
+            unit_id: unit.id,
+            is_assigned: !!categoryMap[unit.category_id] || false,
           })),
           { transaction }
         );
+        // Update optional qualifications
+        const optionalQualificationIds = qualificationIds.filter((qid) => {
+          const qUnits = units_.filter((u) => u.qualification_id === qid);
+          return (
+            qUnits.length > 0 &&
+            qUnits.every((unit) => !!categoryMap[unit.category_id])
+          );
+        });
+        if (optionalQualificationIds.length > 0) {
+          await UserQualification.update(
+            { is_optional_assigned: true },
+            { where: { user_id: learnerId, qualification_id: { [Op.in]: optionalQualificationIds } }, transaction }
+          );
+        }
       }
 
       // Update Assessor associations if provided
@@ -558,6 +583,9 @@ class LearnerService {
       if (data.is_signed_off) {
         throughWhere.is_signed_off = data.is_signed_off;
       }
+      if (data.is_optional_assigned) {
+        throughWhere.is_optional_assigned = data.is_optional_assigned;
+      }
 
       let include = [
         {
@@ -566,7 +594,7 @@ class LearnerService {
           where: whereConditionQualification,
           required: qualificationRequired,
           through: {
-            attributes: ["is_signed_off"],
+            attributes: ["is_signed_off", "is_optional_assigned"],
             where: throughWhere,
           }, // prevent including join table info
         },
@@ -627,6 +655,8 @@ class LearnerService {
                     ...rest,
                     is_signed_off:
                       tbl_user_qualification?.is_signed_off ?? null,
+                    is_optional_assigned:
+                      tbl_user_qualification?.is_optional_assigned ?? null,
                   };
                 })
               );
@@ -675,7 +705,7 @@ class LearnerService {
             model: Qualifications,
             as: "qualifications",
             required: false,
-            through: { attributes: ["is_signed_off"] }, // prevent including join table info
+            through: { attributes: ["is_signed_off", "is_optional_assigned"] }, // prevent including join table info
           },
           {
             model: User,
@@ -710,6 +740,10 @@ class LearnerService {
               is_signed_off:
                 tbl_user_qualification?.is_signed_off ??
                 UserQualification?.is_signed_off ??
+                null,
+              is_optional_assigned:
+                tbl_user_qualification?.is_optional_assigned ??
+                UserQualification?.is_optional_assigned ??
                 null,
             };
           })

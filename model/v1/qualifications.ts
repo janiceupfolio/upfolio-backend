@@ -92,6 +92,9 @@ class qualificationService {
           { transaction }
         );
         // Unit Data processing logic
+        // Track processed unit_ref_no values within this Excel file to detect duplicates
+        const processedUnitRefNos = new Map<string, string>(); // Map<unit_ref_no, sheetName>
+        
         for (const sheetName of workbook.SheetNames) {
           // Skip the front page sheet and only process unit sheets
           if (sheetName.toLowerCase() === "front page" || sheetName.toLowerCase() === "frontpage") continue;
@@ -110,6 +113,19 @@ class qualificationService {
             };
           }
 
+          // Check for duplicate unit_ref_no within the Excel file
+          if (processedUnitRefNos.has(unitRefNo)) {
+            const duplicateSheetName = processedUnitRefNos.get(unitRefNo);
+            await transaction.rollback();
+            return {
+              status: STATUS_CODES.BAD_REQUEST,
+              message: `Duplicate Unit Reference Number '${unitRefNo}' found in Excel file. First occurrence in sheet '${duplicateSheetName}' (Unit ${unitNo}), duplicate in sheet '${sheetName}' (Unit ${unitNo}). Please remove the duplicate.`,
+            };
+          }
+
+          // Mark this unit_ref_no as processed
+          processedUnitRefNos.set(unitRefNo, sheetName);
+
           const existingUnit = await Units.findOne({
             where: { unit_ref_no: unitRefNo, deletedAt: null },
             attributes: ["id"],
@@ -119,7 +135,7 @@ class qualificationService {
             await transaction.rollback();
             return {
               status: STATUS_CODES.BAD_REQUEST,
-              message: `Unit Reference Number already exists: ${unitNo}`,
+              message: `Unit Reference Number '${unitRefNo}' already exists in database for unit ${unitNo}`,
             };
           }
 
@@ -931,6 +947,9 @@ class qualificationService {
       existingQualificationId = qualificationData.id
     }
 
+    // Track processed unit_ref_no values within this Excel file to detect duplicates
+    const processedUnitRefNos = new Map<string, string>(); // Map<unit_ref_no, sheetName>
+
     for (const sheetName of workbook.SheetNames) {
       // if (!sheetName.toLowerCase().startsWith("unit")) continue;
       if (sheetName.toLowerCase() === "front page" || sheetName.toLowerCase() === "frontpage") continue;
@@ -941,6 +960,39 @@ class qualificationService {
       const unitRefNo = sheet["B3"]?.v?.toString().trim() || "";
       const category = sheet["B4"]?.v?.toString().trim() || "";
       const isMandatory = (sheet["B5"]?.v?.toString().trim() || "") === "Yes" ? true : false;
+
+      if (!unitRefNo) {
+        return {
+          status: STATUS_CODES.BAD_REQUEST,
+          message: `Unit Reference Number is missing for unit ${unitNo} in sheet '${sheetName}'`,
+        };
+      }
+
+      // Check for duplicate unit_ref_no within the Excel file
+      if (processedUnitRefNos.has(unitRefNo)) {
+        const duplicateSheetName = processedUnitRefNos.get(unitRefNo);
+        return {
+          status: STATUS_CODES.BAD_REQUEST,
+          message: `Duplicate Unit Reference Number '${unitRefNo}' found in Excel file. First occurrence in sheet '${duplicateSheetName}' (Unit ${unitNo}), duplicate in sheet '${sheetName}' (Unit ${unitNo}). Please remove the duplicate.`,
+        };
+      }
+
+      // Mark this unit_ref_no as processed
+      processedUnitRefNos.set(unitRefNo, sheetName);
+
+      // Check if unit_ref_no already exists in database
+      const existingUnit = await Units.findOne({
+        where: { unit_ref_no: unitRefNo, deletedAt: null },
+        attributes: ["id"],
+        transaction,
+      });
+
+      if (existingUnit) {
+        return {
+          status: STATUS_CODES.BAD_REQUEST,
+          message: `Unit Reference Number '${unitRefNo}' already exists in database for unit ${unitNo}`,
+        };
+      }
 
       let categoryId: number | null = null;
       let categoryData = await Category.findOne({

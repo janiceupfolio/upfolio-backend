@@ -13,7 +13,7 @@ module.exports = {
       type: Sequelize.BOOLEAN,
       defaultValue: false,
     });
-    await queryInterface.addColumn("tbl_user_qualifications", "is_optional_assigned", {
+    await queryInterface.addColumn("tbl_user_qualification", "is_optional_assigned", {
       type: Sequelize.BOOLEAN,
       defaultValue: false,
     });
@@ -27,6 +27,6 @@ module.exports = {
      * await queryInterface.dropTable('users');
      */
     await queryInterface.removeColumn("tbl_user_units", "is_assigned");
-    await queryInterface.removeColumn("tbl_user_qualifications", "is_optional_assigned");
+    await queryInterface.removeColumn("tbl_user_qualification", "is_optional_assigned");
   }
 };

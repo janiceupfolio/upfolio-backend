@@ -96,10 +96,29 @@ router.route("/update/:id").put(
 
 router.route("/list").get(authenticateUser, learnerController.listLearner);
 
-router.route('/detail/:id').get(authenticateUser, learnerController.detailLearner)
+router
+  .route("/detail/:id")
+  .get(authenticateUser, learnerController.detailLearner);
 
-router.route('/delete/:id').delete(authenticateUser, learnerController.deleteLearner)
+router
+  .route("/delete/:id")
+  .delete(authenticateUser, learnerController.deleteLearner);
 
-router.route('/assign-status/:id').put(authenticateUser, learnerController.assignStatusLearner)
+router.route("/assign-status/:id").put(
+  validate([
+    body("qualification_ids")
+      .notEmpty()
+      .withMessage("Qualification IDs are required")
+      .matches(/^(\d+,)*\d+$/)
+      .withMessage("Qualifications must be a comma-separated list of IDs"),
+    body("is_optional_assigned")
+      .notEmpty()
+      .withMessage("Is optional assigned is required")
+      .isIn([true, false])
+      .withMessage("Is optional assigned must be a boolean"),
+  ]),
+  authenticateUser,
+  learnerController.assignStatusLearner
+);
 
 export default router;
