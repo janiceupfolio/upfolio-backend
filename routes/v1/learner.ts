@@ -100,4 +100,6 @@ router.route('/detail/:id').get(authenticateUser, learnerController.detailLearne
 
 router.route('/delete/:id').delete(authenticateUser, learnerController.deleteLearner)
 
+router.route('/assign-status/:id').put(authenticateUser, learnerController.assignStatusLearner)
+
 export default router;

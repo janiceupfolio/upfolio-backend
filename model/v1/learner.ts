@@ -12,6 +12,7 @@ import UserAssessor from "../../database/schema/user_assessor";
 import UserIQA from "../../database/schema/user_iqa";
 import UserUnits from "../../database/schema/user_units";
 import Units from "../../database/schema/units";
+import Category from "../../database/schema/category";
 const { sequelize } = require("../../configs/database");
 
 class LearnerService {
@@ -23,7 +24,12 @@ class LearnerService {
     const transaction = await sequelize.transaction();
     try {
       // @ts-ignore
-      if (data.id === null || data.id === undefined || data.id === 0 || data.id === '') {
+      if (
+        data.id === null ||
+        data.id === undefined ||
+        data.id === 0 ||
+        data.id === ""
+      ) {
         delete data.id;
       }
       // Check if email already used
@@ -38,8 +44,8 @@ class LearnerService {
             },
             {
               center_id: { [Op.ne]: userData.center_id },
-            }
-          ]
+            },
+          ],
         },
         attributes: ["id"],
       });
@@ -106,15 +112,47 @@ class LearnerService {
           qualification_id: { [Op.in]: qualificationIds },
         },
       });
-      const units = units_.map((unit) => unit.id);
+      const categoryIds = units_.map((unit) => unit.category_id);
+      const validCategories = await Category.findAll({
+        where: { id: { [Op.in]: categoryIds } },
+        attributes: ["id", "is_mandatory"],
+      });
+      const categoryMap: Record<number, boolean> = validCategories.reduce(
+        (acc, category) => {
+          acc[category.id] = category.is_mandatory;
+          return acc;
+        },
+        {}
+      );
       // Associate Learner with Units
       await UserUnits.bulkCreate(
-        units.map((unitId) => ({
+        units_.map((unit) => ({
           user_id: createUser.id,
-          unit_id: unitId,
+          unit_id: unit.id,
+          is_assigned: !!categoryMap[unit.category_id] || false,
         })),
         { transaction }
       );
+      const optionalQualificationIds = qualificationIds.filter((qid) => {
+        const qUnits = units_.filter((u) => u.qualification_id === qid);
+        return (
+          qUnits.length > 0 &&
+          qUnits.every((unit) => !!categoryMap[unit.category_id])
+        );
+      });
+
+      if (optionalQualificationIds.length > 0) {
+        await UserQualification.update(
+          { is_optional_assigned: true },
+          {
+            where: {
+              user_id: createUser.id,
+              qualification_id: { [Op.in]: optionalQualificationIds },
+            },
+            transaction,
+          }
+        );
+      }
       // Send Email to Learner
       await emailService.sendLearnerAccountEmail(
         createUser.name,
@@ -220,25 +258,25 @@ class LearnerService {
           [Op.or]: [
             {
               role: Roles.LEARNER,
-              center_id: userData.center_id
+              center_id: userData.center_id,
             },
             {
               center_id: { [Op.ne]: userData.center_id },
-            }
-          ]
+            },
+          ],
         },
       });
       if (isEmailUsed) {
         if (isEmailUsed.center_id == userData.center_id) {
           return {
             status: STATUS_CODES.BAD_REQUEST,
-            messsage: "Email already used for this role in current center"
-          }
+            messsage: "Email already used for this role in current center",
+          };
         } else {
           return {
             status: STATUS_CODES.BAD_REQUEST,
-            message: "Email already used in another center"
-          }
+            message: "Email already used in another center",
+          };
         }
       }
       data.center_id = userData.center_id;
@@ -384,7 +422,10 @@ class LearnerService {
       }
       if (data.email && isValidUser.email !== data.email) {
         let password = await generateSecurePassword();
-        await User.update({ password: password }, { where: { id: isValidUser.id }, transaction })
+        await User.update(
+          { password: password },
+          { where: { id: isValidUser.id }, transaction }
+        );
         // Send Email to Learner
         await emailService.sendLearnerAccountEmail(
           data.name,
@@ -399,7 +440,7 @@ class LearnerService {
         message: "Learner Updated Successfully",
       };
     } catch (error) {
-      console.log(error)
+      console.log(error);
       await transaction.rollback();
       return {
         status: STATUS_CODES.SERVER_ERROR,
@@ -513,9 +554,9 @@ class LearnerService {
       });
 
       // through where condition
-      let throughWhere: any = {}
+      let throughWhere: any = {};
       if (data.is_signed_off) {
-        throughWhere.is_signed_off = data.is_signed_off
+        throughWhere.is_signed_off = data.is_signed_off;
       }
 
       let include = [
@@ -524,9 +565,9 @@ class LearnerService {
           as: "qualifications",
           where: whereConditionQualification,
           required: qualificationRequired,
-          through: { 
+          through: {
             attributes: ["is_signed_off"],
-            where: throughWhere 
+            where: throughWhere,
           }, // prevent including join table info
         },
         {
@@ -541,7 +582,7 @@ class LearnerService {
           as: "center",
           attributes: ["id", "center_name", "center_address"],
         },
-      ]
+      ];
 
       if (isAssessor) {
         // Use the correct column name (user_id) instead of learner_id
@@ -559,7 +600,7 @@ class LearnerService {
           through: { attributes: [] },
           where: whereConditionInclude,
           required: includeRequiredAssessor,
-        })
+        });
       }
 
       let userData_ = await User.findAndCountAll({
@@ -584,7 +625,8 @@ class LearnerService {
                   const { tbl_user_qualification, ...rest } = q; // remove join object
                   return {
                     ...rest,
-                    is_signed_off: tbl_user_qualification?.is_signed_off ?? null,
+                    is_signed_off:
+                      tbl_user_qualification?.is_signed_off ?? null,
                   };
                 })
               );
@@ -599,10 +641,10 @@ class LearnerService {
         pagination: pagination,
         center_data: center_data
           ? {
-            id: center_data.id,
-            center_name: center_data.center_name,
-            center_address: center_data.center_address,
-          }
+              id: center_data.id,
+              center_name: center_data.center_name,
+              center_address: center_data.center_address,
+            }
           : {},
       };
       return {
@@ -719,6 +761,51 @@ class LearnerService {
         status: STATUS_CODES.SUCCESS,
         data: {},
         message: "Learner deleted successfully",
+      };
+    } catch (error) {
+      console.log(error);
+      return {
+        status: STATUS_CODES.SERVER_ERROR,
+        message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
+
+  // Assign Status Learner
+  static async assignStatusLearner(
+    learnerId: number | string,
+    data: any,
+    userData: userAuthenticationData
+  ) {
+    try {
+      let learnerData = await User.findOne({
+        where: { id: learnerId, deletedAt: null, role: Roles.LEARNER },
+      });
+      if (!learnerData) {
+        return {
+          status: STATUS_CODES.BAD_REQUEST,
+          message: "Learner not found",
+        };
+      }
+      // Unit ids came in comma separated string and some time it come "" or null as well
+      let unitIds = data.unit_ids.split(",").map((id) => parseInt(id.trim()));
+      if (unitIds.length > 0) {
+        await UserUnits.update(
+          { is_assigned: true },
+          { where: { user_id: learnerId, unit_id: { [Op.in]: unitIds } } }
+        );
+      }
+      let qualificationIds = data.qualification_ids.split(",").map((id) => parseInt(id.trim()));
+      if (qualificationIds.length > 0) {
+        let qualificationUpdate = await UserQualification.update(
+          { is_optional_assigned: data.is_optional_assigned },
+          { where: { user_id: learnerId, qualification_id: { [Op.in]: qualificationIds } } }
+        );
+      }
+      return {
+        status: STATUS_CODES.SUCCESS,
+        data: {},
+        message: "Status updated successfully",
       };
     } catch (error) {
       console.log(error);

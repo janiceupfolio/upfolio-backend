@@ -11,6 +11,7 @@ class UserUnits extends Model<UserUnitsInterface> implements UserUnitsInterface 
   public unit_id: number;
   public is_sampling: boolean;
   public reference_type: number;
+  public is_assigned: boolean;
   public status: number;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -38,6 +39,10 @@ UserUnits.init(
       allowNull: true,
       defaultValue: 1,
       comment: "1: Unit | 2: Assessment",
+    },
+    is_assigned: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
     status: {
       type: DataTypes.INTEGER,

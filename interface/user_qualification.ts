@@ -4,6 +4,7 @@ export interface UserQualificationInterface {
   qualification_id: number;
   status: number;
   is_signed_off: boolean;
+  is_optional_assigned: boolean;
   createdAt?: Date;
   updatedAt?: Date;
   deletedAt?: Date;

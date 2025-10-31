@@ -14,6 +14,7 @@ class UserQualification
   public qualification_id: number;
   public status: number;
   public is_signed_off: boolean;
+  public is_optional_assigned: boolean;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
   public deletedAt?: Date;
@@ -39,6 +40,10 @@ UserQualification.init(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    is_optional_assigned: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    }
   },
   {
     ...BaseModel.initBaseOptions(sequelize),
