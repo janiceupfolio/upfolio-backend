@@ -59,12 +59,14 @@ class qualificationController {
   // Get Category By Qualification
   static async getCategoryByQualification(req: Request, res: Response): Promise<void> {
     try {
+      let data = req.query
       let qualificationId = req.params.id as number | string;
       let assessmentId = req.query.assessment_id as number | string;
       let userData = req.headers["user_info"] as userAuthenticationData;
       let learnerId = req.query.learner_id as number | string;
       
       let request = await qualificationService.getCategoryByQualification(
+        data,
         qualificationId,
         userData,
         learnerId,

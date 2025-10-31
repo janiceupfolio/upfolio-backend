@@ -1086,6 +1086,7 @@ class qualificationService {
   }
 
   static async getCategoryByQualification(
+    data: any,
     qualificationId: number | string,
     userData: userAuthenticationData,
     learnerId?: number | string,
@@ -1223,7 +1224,29 @@ class qualificationService {
       });
     }
 
-    const result = Array.from(categoryMap.values());
+    let result 
+    if (data.categorywise_unit_data == 1) {
+      console.log("working")
+      let qualification = await Qualifications.findOne({
+        where: { id: qualificationId },
+        attributes: ["id", "name", "qualification_no"]
+      })
+      qualification = JSON.parse(JSON.stringify(qualification))
+      let userQualification = await UserQualification.findOne({
+        where: { user_id: learnerId, qualification_id: qualificationId },
+        attributes: ["is_signed_off", "is_optional_assigned"]
+      })
+      result = {
+        qualification_id: qualification.id,
+        qualification_name: qualification.name,
+        qualification_no: qualification.qualification_no,
+        is_signed_off: userQualification?.is_signed_off || false,
+        is_optional_assigned: userQualification?.is_optional_assigned || false,
+        categorywise_unit_data: Array.from(categoryMap.values())
+      }
+    } else {
+      result = Array.from(categoryMap.values());
+    }
 
     // Step 6: Return final grouped response
     return {
