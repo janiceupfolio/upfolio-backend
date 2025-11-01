@@ -1201,10 +1201,16 @@ class qualificationService {
       category: unit.category?.category_name || "Uncategorized",
     }));
 
+    let filteredUnits = formattedUnits;
+    if (data.is_assign == 1) {
+      filteredUnits = formattedUnits.filter(unit => !!unit.is_assigned);
+    }
+
+
     // Step 5: Group by category
     const categoryMap = new Map<number, any>();
 
-    for (const unit of formattedUnits) {
+    for (const unit of filteredUnits) {
       const catId = unit.category_id || 0;
       if (!categoryMap.has(catId)) {
         categoryMap.set(catId, {
