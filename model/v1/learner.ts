@@ -13,6 +13,7 @@ import UserIQA from "../../database/schema/user_iqa";
 import UserUnits from "../../database/schema/user_units";
 import Units from "../../database/schema/units";
 import Category from "../../database/schema/category";
+import qualificationService from "./qualifications";
 const { sequelize } = require("../../configs/database");
 
 class LearnerService {
@@ -822,14 +823,14 @@ class LearnerService {
         };
       }
       // Unit ids came in comma separated string and some time it come "" or null as well
-      let unitIds = data.unit_ids.split(",").map((id) => parseInt(id.trim()));
+      let unitIds = data.unit_ids.split(",").map((id) => id.trim()).filter((id) => id !== "" && !isNaN(id)).map((id) => parseInt(id));
       if (unitIds.length > 0) {
         await UserUnits.update(
           { is_assigned: true },
           { where: { user_id: learnerId, unit_id: { [Op.in]: unitIds } } }
         );
       }
-      let qualificationIds = data.qualification_ids.split(",").map((id) => parseInt(id.trim()));
+      let qualificationIds = data.qualification_ids.split(",").map((id) => id.trim()).filter((id) => id !== "" && !isNaN(id)).map((id) => parseInt(id));
       if (qualificationIds.length > 0) {
         await UserQualification.update(
           { is_optional_assigned: data.is_optional_assigned },
@@ -837,16 +838,26 @@ class LearnerService {
         );
       }
       // is_not_assign_unit handle 
-      let notAssignUnit = data.is_not_assign_unit.split(",").map((id) => parseInt(id.trim()));
+      let notAssignUnit = data.is_not_assign_unit.split(",").map((id) => id.trim()).filter((id) => id !== "" && !isNaN(id)).map((id) => parseInt(id));
       if (notAssignUnit.length > 0) {
         await UserUnits.update(
           { is_assigned: false },
           { where: { user_id: learnerId, unit_id: { [Op.in]: notAssignUnit } } }
         )
       }
+      let response = await qualificationService.getCategoryByQualification(
+        { categorywise_unit_data: 1 },
+        qualificationIds[0],
+        userData,
+        learnerId
+      )
+      let response_ = {}
+      if (response.data && response.status == 200) {
+        response_ = response.data
+      }
       return {
         status: STATUS_CODES.SUCCESS,
-        data: {},
+        data: response_,
         message: "Status updated successfully",
       };
     } catch (error) {

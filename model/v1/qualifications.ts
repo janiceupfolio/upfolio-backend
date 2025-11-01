@@ -1226,7 +1226,6 @@ class qualificationService {
 
     let result 
     if (data.categorywise_unit_data == 1) {
-      console.log("working")
       let qualification = await Qualifications.findOne({
         where: { id: qualificationId },
         attributes: ["id", "name", "qualification_no"]
