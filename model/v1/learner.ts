@@ -831,10 +831,18 @@ class LearnerService {
       }
       let qualificationIds = data.qualification_ids.split(",").map((id) => parseInt(id.trim()));
       if (qualificationIds.length > 0) {
-        let qualificationUpdate = await UserQualification.update(
+        await UserQualification.update(
           { is_optional_assigned: data.is_optional_assigned },
           { where: { user_id: learnerId, qualification_id: { [Op.in]: qualificationIds } } }
         );
+      }
+      // is_not_assign_unit handle 
+      let notAssignUnit = data.is_not_assign_unit.split(",").map((id) => parseInt(id.trim()));
+      if (notAssignUnit.length > 0) {
+        await UserUnits.update(
+          { is_assigned: false },
+          { where: { user_id: learnerId, unit_id: { [Op.in]: notAssignUnit } } }
+        )
       }
       return {
         status: STATUS_CODES.SUCCESS,
