@@ -671,10 +671,10 @@ class LearnerService {
         pagination: pagination,
         center_data: center_data
           ? {
-              id: center_data.id,
-              center_name: center_data.center_name,
-              center_address: center_data.center_address,
-            }
+            id: center_data.id,
+            center_name: center_data.center_name,
+            center_address: center_data.center_address,
+          }
           : {},
       };
       return {
@@ -883,25 +883,42 @@ class LearnerService {
         where: { user_id: data.learner_id, unit_id: { [Op.in]: units.map((unit: any) => unit.id) }, deletedAt: null },
         attributes: ["id", "is_assigned", "unit_id"],
       });
-      let unitMap = new Map();
-      units.forEach((unit: any) => {
-        unitMap.set(unit.id, {
+      // Group units by category
+      const categoryMap = new Map();
+
+      for (const unit of units) {
+        const categoryId = unit.category_id || 0;
+        const categoryName = unit.category?.category_name || "Uncategorized";
+
+        if (!categoryMap.has(categoryId)) {
+          categoryMap.set(categoryId, {
+            category_id: categoryId,
+            category_name: categoryName,
+            units: [],
+          });
+        }
+
+        categoryMap.get(categoryId).units.push({
           unit_id: unit.id,
           unit_title: unit.unit_title,
           unit_number: unit.unit_number,
-          category_id: unit.category_id,
-          category_name: unit.category?.category_name || null,
-          is_assigned: userUnits.some((userUnit: any) => userUnit.unit_id == unit.id && userUnit.is_assigned) || false,
+          is_assigned:
+            userUnits.some(
+              (u: any) => u.unit_id === unit.id && u.is_assigned
+            ) || false,
         });
-      });
-      let responseObject = {
+      }
+
+      // Final response
+      const responseObject = {
         qualification_id: qualificationData.id,
         qualification_name: qualificationData.name,
         qualification_no: qualificationData.qualification_no,
         is_signed_off: userQualification?.is_signed_off || false,
         is_optional_assigned: userQualification?.is_optional_assigned || false,
-        units: Array.from(unitMap.values()),
-      }
+        categories: Array.from(categoryMap.values()),
+      };
+
       return {
         status: STATUS_CODES.SUCCESS,
         data: responseObject,
