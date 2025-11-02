@@ -94,7 +94,7 @@ class qualificationService {
         // Unit Data processing logic
         // Track processed unit_ref_no values within this Excel file to detect duplicates
         const processedUnitRefNos = new Map<string, string>(); // Map<unit_ref_no, sheetName>
-        
+
         for (const sheetName of workbook.SheetNames) {
           // Skip the front page sheet and only process unit sheets
           if (sheetName.toLowerCase() === "front page" || sheetName.toLowerCase() === "frontpage") continue;
@@ -411,7 +411,7 @@ class qualificationService {
           [{ model: MainOutcomes, as: "mainOutcomes" }, "main_number", "ASC"],
         ],
       });
-      
+
       // Early return if no units found
       if (!units || units.length === 0) {
         return {
@@ -1142,7 +1142,7 @@ class qualificationService {
           [{ model: MainOutcomes, as: "mainOutcomes" }, "main_number", "ASC"],
         ],
       });
-      
+
       // Early return if no units found
       if (!units || units.length === 0) {
         return {
@@ -1168,97 +1168,179 @@ class qualificationService {
           samplingMap.set(item.unit_id, { is_sampling: item.is_sampling, is_assigned: item.is_assigned });
         });
       }
-      const formattedUnits = units.map(unit => ({
-      id: unit.id,
-      unitTitle: unit.unit_title,
-      unitNumber: unit.unit_number,
-      is_mandatory: !!unit.category.is_mandatory,
-      isSampling: !!samplingMap.get(unit.id)?.is_sampling,
-      is_assigned: !!samplingMap.get(unit.id)?.is_assigned,
-      // @ts-ignore
-      main_outcomes: unit.mainOutcomes.map(main => ({
-        id: main.id,
-        main_number: main.main_number,
-        description: main.description,
-        marks: main.marks || "0",
-        outcome_marks: main.outcome_marks || "0",
-        max_outcome_marks: main.max_outcome_marks || "0",
-        sub_outcomes: main.subOutcomes.map(sub => ({
-          id: sub.id,
-          number: sub.number,
-          description: sub.description,
-          outcome_marks: sub.outcome_marks || "0",
-          max_outcome_marks: sub.max_outcome_marks || "0",
-          sub_points: sub.outcomeSubpoints?.map(point => ({
-            id: point.id,
-            point_text: point.point_text,
-            mark: point.mark || "0",
-            max_marks: point.max_marks || "0",
-          })) || [],
-        })),
-      })),
-      category_id: unit.category?.id || null,
-      category: unit.category?.category_name || "Uncategorized",
-    }));
 
-    let filteredUnits = formattedUnits;
-    if (data.is_assign == 1) {
-      filteredUnits = formattedUnits.filter(unit => !!unit.is_assigned);
-    }
+      // Format units and include marks when learnerId is present
+      const formattedUnits = await Promise.all(units.map(async (unit) => {
+        // For each main outcome, for each subOutcome and each subpoint, attach marks if learnerId is provided
+        // @ts-ignore
+        const main_outcomes = await Promise.all((unit.mainOutcomes || []).map(async (main) => {
+          const mainEntry: any = {
+            id: main.id,
+            main_number: main.main_number,
+            description: main.description,
+            marks: main.marks || "0",
+            outcome_marks: "0",
+            max_outcome_marks: main.marks || "0",
+            sub_outcomes: []
+          };
 
+          // Process sub outcomes
+          const subOutcomesProcessed = await Promise.all((main.subOutcomes || []).map(async (sub) => {
+            // parse number safely (keep compatibility with older format)
+            const outcomeNumberParts = (sub.outcome_number || sub.number || "").toString().split(".");
+            const numericSection = outcomeNumberParts[0] ? parseInt(outcomeNumberParts[0], 10).toString() : "0";
+            const numericOutcome = outcomeNumberParts[1] ? parseInt(outcomeNumberParts[1], 10).toString() : "0";
+            const fullOutcomeNumber = `${numericSection}.${numericOutcome}`;
 
-    // Step 5: Group by category
-    const categoryMap = new Map<number, any>();
+            const subEntry: any = {
+              id: sub.id,
+              number: fullOutcomeNumber,
+              description: sub.description,
+              outcome_marks: "0",
+              max_outcome_marks: sub.marks || "0",
+              sub_points: []
+            };
 
-    for (const unit of filteredUnits) {
-      const catId = unit.category_id || 0;
-      if (!categoryMap.has(catId)) {
-        categoryMap.set(catId, {
-          category_id: catId,
-          category: unit.category,
-          units: [],
+            if (learnerId) {
+              // get outcome marks (uses your existing helper)
+              try {
+                const outcomeMarksData = await this.getOutcomeMarksFromAssessment(
+                  sub.id,
+                  learnerId,
+                  qualificationId,
+                  assessmentId
+                );
+                subEntry.outcome_marks = outcomeMarksData?.total_marks || "0";
+                subEntry.max_outcome_marks = outcomeMarksData?.max_marks || sub.marks || "0";
+              } catch (err) {
+                // fallback to defaults on error
+                subEntry.outcome_marks = "0";
+                subEntry.max_outcome_marks = sub.marks || "0";
+              }
+            } else {
+              subEntry.outcome_marks = "0";
+              subEntry.max_outcome_marks = sub.marks || "0";
+            }
+
+            // Process subpoints
+            const subPointsProcessed = await Promise.all((sub.outcomeSubpoints || []).map(async (point) => {
+              const subPointEntry: any = {
+                id: point.id,
+                point_text: point.point_text,
+                mark: "0",
+                max_marks: point.marks || point.max_marks || "0"
+              };
+
+              if (learnerId) {
+                try {
+                  const latestMarkData = await this.getLatestAssessmentMark(
+                    point.id,
+                    learnerId,
+                    qualificationId,
+                    assessmentId
+                  );
+                  subPointEntry.mark = latestMarkData?.marks || "0";
+                  subPointEntry.max_marks = latestMarkData?.max_marks || point.marks || point.max_marks || "0";
+                } catch (err) {
+                  subPointEntry.mark = "0";
+                  subPointEntry.max_marks = point.marks || point.max_marks || "0";
+                }
+              } else {
+                subPointEntry.mark = "0";
+                subPointEntry.max_marks = point.marks || point.max_marks || "0";
+              }
+
+              return subPointEntry;
+            }));
+
+            subEntry.sub_points = subPointsProcessed;
+            // maintain backward-compatible property name too
+            subEntry.subPoints = (sub.outcomeSubpoints || []).map(p => p.point_text);
+
+            return subEntry;
+          }));
+
+          // sort subOutcomes by their numeric outcome number if needed (reuse existing helper if available)
+          if (this.compareOutcomeNumbers) {
+            subOutcomesProcessed.sort((a, b) => this.compareOutcomeNumbers(a.number, b.number));
+          } else {
+            subOutcomesProcessed.sort((a, b) => a.number.localeCompare(b.number));
+          }
+
+          mainEntry.sub_outcomes = subOutcomesProcessed;
+          return mainEntry;
+        }));
+
+        return {
+          id: unit.id,
+          unitTitle: unit.unit_title,
+          unitNumber: unit.unit_number,
+          is_mandatory: !!unit.category?.is_mandatory,
+          isSampling: !!samplingMap.get(unit.id)?.is_sampling,
+          is_assigned: !!samplingMap.get(unit.id)?.is_assigned,
+          main_outcomes,
+          category_id: unit.category?.id || null,
+          category: unit.category?.category_name || "Uncategorized",
+        };
+      }));
+
+      let filteredUnits = formattedUnits;
+      if (data.is_assign == 1) {
+        filteredUnits = formattedUnits.filter(unit => !!unit.is_assigned);
+      }
+
+      // Step 5: Group by category
+      const categoryMap = new Map<number, any>();
+
+      for (const unit of filteredUnits) {
+        const catId = unit.category_id || 0;
+        if (!categoryMap.has(catId)) {
+          categoryMap.set(catId, {
+            category_id: catId,
+            category: unit.category,
+            units: [],
+          });
+        }
+        categoryMap.get(catId).units.push({
+          id: unit.id,
+          unitTitle: unit.unitTitle,
+          unitNumber: unit.unitNumber,
+          is_mandatory: unit.is_mandatory,
+          isSampling: unit.isSampling,
+          is_assigned: unit.is_assigned,
+          main_outcomes: unit.main_outcomes,
         });
       }
-      categoryMap.get(catId).units.push({
-        id: unit.id,
-        unitTitle: unit.unitTitle,
-        unitNumber: unit.unitNumber,
-        is_mandatory: unit.is_mandatory,
-        isSampling: unit.isSampling,
-        is_assigned: unit.is_assigned,
-        main_outcomes: unit.main_outcomes,
-      });
-    }
 
-    let result 
-    if (data.categorywise_unit_data == 1) {
-      let qualification = await Qualifications.findOne({
-        where: { id: qualificationId },
-        attributes: ["id", "name", "qualification_no"]
-      })
-      qualification = JSON.parse(JSON.stringify(qualification))
-      let userQualification = await UserQualification.findOne({
-        where: { user_id: learnerId, qualification_id: qualificationId },
-        attributes: ["is_signed_off", "is_optional_assigned"]
-      })
-      result = {
-        qualification_id: qualification.id,
-        qualification_name: qualification.name,
-        qualification_no: qualification.qualification_no,
-        is_signed_off: userQualification?.is_signed_off || false,
-        is_optional_assigned: userQualification?.is_optional_assigned || false,
-        categorywise_unit_data: Array.from(categoryMap.values())
+      let result;
+      if (data.categorywise_unit_data == 1) {
+        let qualification = await Qualifications.findOne({
+          where: { id: qualificationId },
+          attributes: ["id", "name", "qualification_no"]
+        });
+        qualification = JSON.parse(JSON.stringify(qualification));
+        let userQualification = await UserQualification.findOne({
+          where: { user_id: learnerId, qualification_id: qualificationId },
+          attributes: ["is_signed_off", "is_optional_assigned"]
+        });
+        result = {
+          qualification_id: qualification.id,
+          qualification_name: qualification.name,
+          qualification_no: qualification.qualification_no,
+          is_signed_off: userQualification?.is_signed_off || false,
+          is_optional_assigned: userQualification?.is_optional_assigned || false,
+          categorywise_unit_data: Array.from(categoryMap.values())
+        };
+      } else {
+        result = Array.from(categoryMap.values());
       }
-    } else {
-      result = Array.from(categoryMap.values());
-    }
 
-    // Step 6: Return final grouped response
-    return {
-      status: STATUS_CODES.SUCCESS,
-      data: result,
-      message: "Qualification categories and units retrieved successfully.",
-    };
+      // Step 6: Return final grouped response
+      return {
+        status: STATUS_CODES.SUCCESS,
+        data: result,
+        message: "Qualification categories and units retrieved successfully.",
+      };
     } catch (error) {
       console.error("Error retrieving qualifications:", error);
       return {
