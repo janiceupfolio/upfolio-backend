@@ -94,6 +94,8 @@ class qualificationService {
         // Unit Data processing logic
         // Track processed unit_ref_no values within this Excel file to detect duplicates
         const processedUnitRefNos = new Map<string, string>(); // Map<unit_ref_no, sheetName>
+        let hasMandatoryUnit = false; // Track if at least one mandatory unit exists
+        let category_id_created = []; // Track the id of the category that was created
 
         for (const sheetName of workbook.SheetNames) {
           // Skip the front page sheet and only process unit sheets
@@ -105,6 +107,12 @@ class qualificationService {
           const unitRefNo = sheet["B3"]?.v?.toString().trim() || "";
           const category = sheet["B4"]?.v?.toString().trim() || "";
           const isMandatory = (sheet["B5"]?.v?.toString().trim() || "") === "Yes" ? true : false;
+          
+          // Track if at least one mandatory unit exists
+          if (isMandatory) {
+            hasMandatoryUnit = true;
+          }
+          
           if (!unitRefNo) {
             await transaction.rollback();
             return {
@@ -161,6 +169,7 @@ class qualificationService {
           } else {
             categoryData = await Category.create({ category_name: category, is_mandatory: isMandatory });
             categoryId = categoryData.id;
+            category_id_created.push(categoryData.id);
           }
           // create unit
           let unitData = await Units.create(
@@ -226,6 +235,25 @@ class qualificationService {
             }
           }
         }
+        
+        // Validate that at least one mandatory unit exists
+        if (!hasMandatoryUnit) {
+          /**
+           * Need to delete the category that was created if it was created
+           * because category is created and we can not add transection in category model
+           * for that reason we are deleting the category that was created if it was created
+           * and if we did not delete then if user try to add another qualification with same category then it will give error
+           */
+          if (category_id_created.length > 0) {
+            await Category.destroy({ where: { id: { [Op.in]: category_id_created } }, force: true });
+          }
+          await transaction.rollback();
+          return {
+            status: STATUS_CODES.BAD_REQUEST,
+            message: "At least one mandatory unit is required in the Excel file.",
+          };
+        }
+        
         // upload file on AWS
         const extension = extname(file.originalname);
         const fileName = qualificationName.replace(/\s+/g, "-")
@@ -950,6 +978,8 @@ class qualificationService {
 
     // Track processed unit_ref_no values within this Excel file to detect duplicates
     const processedUnitRefNos = new Map<string, string>(); // Map<unit_ref_no, sheetName>
+    let category_id_created = []; // Track the id of the category that was created
+    let hasMandatoryUnit = false; // Track if at least one mandatory unit exists
 
     for (const sheetName of workbook.SheetNames) {
       // if (!sheetName.toLowerCase().startsWith("unit")) continue;
@@ -961,6 +991,10 @@ class qualificationService {
       const unitRefNo = sheet["B3"]?.v?.toString().trim() || "";
       const category = sheet["B4"]?.v?.toString().trim() || "";
       const isMandatory = (sheet["B5"]?.v?.toString().trim() || "") === "Yes" ? true : false;
+
+      if (isMandatory) {
+        hasMandatoryUnit = true;
+      }
 
       if (!unitRefNo) {
         return {
@@ -1015,6 +1049,7 @@ class qualificationService {
       } else {
         categoryData = await Category.create({ category_name: category, is_mandatory: isMandatory }, { transaction });
         categoryId = categoryData.id;
+        category_id_created.push(categoryData.id);
       }
       const unitData = await Units.create(
         {
@@ -1076,6 +1111,22 @@ class qualificationService {
           }
         }
       }
+    }
+
+    if (!hasMandatoryUnit) {
+      /**
+       * Need to delete the category that was created if it was created
+       * because category is created and we can not add transection in category model
+       * for that reason we are deleting the category that was created if it was created
+       * and if we did not delete then if user try to add another qualification with same category then it will give error
+       */
+      if (category_id_created.length > 0) {
+        await Category.destroy({ where: { id: { [Op.in]: category_id_created } }, force: true });
+      }
+      return {
+        status: STATUS_CODES.BAD_REQUEST,
+        message: "At least one mandatory unit is required in the Excel file.",
+      };
     }
 
     return {
