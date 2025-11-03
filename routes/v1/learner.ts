@@ -121,13 +121,4 @@ router.route("/assign-status/:id").put(
   learnerController.assignStatusLearner
 );
 
-router.route("/qualification-list").get(
-  validate([
-    query("qualification_id").notEmpty().withMessage("Qualification ID is required"),
-    query("learner_id").notEmpty().withMessage("Learner ID is required"),
-  ]),
-  authenticateUser,
-  learnerController.qualificationList
-);
-
 export default router;

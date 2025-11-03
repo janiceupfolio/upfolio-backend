@@ -107,12 +107,12 @@ class qualificationService {
           const unitRefNo = sheet["B3"]?.v?.toString().trim() || "";
           const category = sheet["B4"]?.v?.toString().trim() || "";
           const isMandatory = (sheet["B5"]?.v?.toString().trim() || "") === "Yes" ? true : false;
-          
+
           // Track if at least one mandatory unit exists
           if (isMandatory) {
             hasMandatoryUnit = true;
           }
-          
+
           if (!unitRefNo) {
             await transaction.rollback();
             return {
@@ -235,7 +235,7 @@ class qualificationService {
             }
           }
         }
-        
+
         // Validate that at least one mandatory unit exists
         if (!hasMandatoryUnit) {
           /**
@@ -253,7 +253,7 @@ class qualificationService {
             message: "At least one mandatory unit is required in the Excel file.",
           };
         }
-        
+
         // upload file on AWS
         const extension = extname(file.originalname);
         const fileName = qualificationName.replace(/\s+/g, "-")
@@ -1394,6 +1394,144 @@ class qualificationService {
       };
     } catch (error) {
       console.error("Error retrieving qualifications:", error);
+      return {
+        status: STATUS_CODES.SERVER_ERROR,
+        message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
+
+  // Qualification List
+  static async unitList(data: any, userData: userAuthenticationData) {
+    try {
+      const qualificationData = await Qualifications.findOne({
+        where: { id: data.qualification_id, deletedAt: null },
+      });
+
+      if (!qualificationData) {
+        return {
+          status: STATUS_CODES.BAD_REQUEST,
+          message: "Qualification not found",
+        };
+      }
+
+      // Get user qualification details
+      const userQualification = await UserQualification.findOne({
+        where: {
+          qualification_id: qualificationData.id,
+          user_id: data.learner_id,
+          deletedAt: null,
+        },
+        attributes: ["is_signed_off", "is_optional_assigned"],
+      });
+
+      // Fetch units
+      const units = await Units.findAll({
+        where: { qualification_id: qualificationData.id, deletedAt: null },
+        attributes: ["id", "unit_title", "unit_number", "category_id"],
+        include: [
+          {
+            model: Category,
+            as: "category",
+            attributes: ["id", "category_name"],
+          },
+        ],
+      });
+
+      // Fetch user-unit mappings
+      const userUnits = await UserUnits.findAll({
+        where: {
+          user_id: data.learner_id,
+          unit_id: { [Op.in]: units.map((u: any) => u.id) },
+          deletedAt: null,
+        },
+        attributes: ["unit_id", "is_assigned"],
+      });
+
+      // Helper: check if a unit is assigned
+      const isUnitAssigned = (unitId: number) =>
+        userUnits.some(
+          (uu: any) => uu.unit_id === unitId && uu.is_assigned === true
+        );
+
+      // Determine logic type
+      const categorywise = parseInt(data.categorywise_record) === 1;
+      const filterAssigned = parseInt(data.is_assigned) === 1;
+
+      let responseObject: any;
+
+      if (categorywise) {
+        // === CATEGORY-WISE LOGIC ===
+        const categoryMap = new Map();
+
+        for (const unit of units) {
+          const assigned = isUnitAssigned(unit.id);
+          if (filterAssigned && !assigned) continue; // skip unassigned units if filter is active
+
+          const categoryId = unit.category_id || 0;
+          const categoryName = unit.category?.category_name || "Uncategorized";
+
+          if (!categoryMap.has(categoryId)) {
+            categoryMap.set(categoryId, {
+              category_id: categoryId,
+              category_name: categoryName,
+              units: [],
+            });
+          }
+
+          categoryMap.get(categoryId).units.push({
+            unit_id: unit.id,
+            unit_title: unit.unit_title,
+            unit_number: unit.unit_number,
+            is_assigned: assigned,
+          });
+        }
+
+        responseObject = {
+          qualification_id: qualificationData.id,
+          qualification_name: qualificationData.name,
+          qualification_no: qualificationData.qualification_no,
+          is_signed_off: userQualification?.is_signed_off || false,
+          is_optional_assigned:
+            userQualification?.is_optional_assigned || false,
+          categories: Array.from(categoryMap.values()),
+        };
+      } else {
+        // === FLAT UNIT LIST LOGIC ===
+        const unitList: any[] = [];
+
+        for (const unit of units) {
+          const assigned = isUnitAssigned(unit.id);
+          if (filterAssigned && !assigned) continue; // skip unassigned units if filter is active
+
+          unitList.push({
+            unit_id: unit.id,
+            unit_title: unit.unit_title,
+            unit_number: unit.unit_number,
+            category_id: unit.category_id,
+            category_name: unit.category?.category_name || null,
+            is_assigned: assigned,
+          });
+        }
+
+        responseObject = {
+          qualification_id: qualificationData.id,
+          qualification_name: qualificationData.name,
+          qualification_no: qualificationData.qualification_no,
+          is_signed_off: userQualification?.is_signed_off || false,
+          is_optional_assigned:
+            userQualification?.is_optional_assigned || false,
+          units: unitList,
+        };
+      }
+
+      return {
+        status: STATUS_CODES.SUCCESS,
+        data: responseObject,
+        message: "Qualification list fetched successfully",
+      };
+    } catch (error) {
+      console.log(error);
       return {
         status: STATUS_CODES.SERVER_ERROR,
         message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,

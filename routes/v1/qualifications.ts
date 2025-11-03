@@ -40,4 +40,8 @@ router
   .route("/cleanup")
   .get(authenticateUser, qualificationController.cleanExistingRecords);
 
+router
+  .route("/unit-list")
+  .get(authenticateUser, qualificationController.unitList);
+
 export default router;
