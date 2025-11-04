@@ -1480,9 +1480,9 @@ class qualificationService {
           }
 
           categoryMap.get(categoryId).units.push({
-            unit_id: unit.id,
-            unit_title: unit.unit_title,
-            unit_number: unit.unit_number,
+            id: unit.id,
+            unitTitle: unit.unit_title,
+            unitNumber: unit.unit_number,
             is_assigned: assigned,
           });
         }
@@ -1505,11 +1505,11 @@ class qualificationService {
           if (filterAssigned && !assigned) continue; // skip unassigned units if filter is active
 
           unitList.push({
-            unit_id: unit.id,
-            unit_title: unit.unit_title,
-            unit_number: unit.unit_number,
+            id: unit.id,
+            unitTitle: unit.unit_title,
+            unitNumber: unit.unit_number,
             category_id: unit.category_id,
-            category_name: unit.category?.category_name || null,
+            category: unit.category?.category_name || null,
             is_assigned: assigned,
           });
         }
