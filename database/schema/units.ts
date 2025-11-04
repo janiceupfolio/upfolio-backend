@@ -5,6 +5,9 @@ import BaseModel from "./base";
 import { TABLE_NAME } from "../../configs/tables";
 import { UnitsInterface } from "../../interface/units";
 import SubOutcomes from "./sub_outcomes";
+import MainOutcomes from "./main_outcomes";
+import Category from "./category";
+import { CategoryInterface } from "../../interface/category";
 
 class Units extends Model<UnitsInterface> implements UnitsInterface {
   public id!: number;
@@ -12,6 +15,7 @@ class Units extends Model<UnitsInterface> implements UnitsInterface {
   public unit_title!: string;
   public unit_number!: string;
   public unit_ref_no!: string;
+  public category_id!: number;
   public created_by!: number;
   public status!: number;
   public marks!: string;
@@ -19,6 +23,7 @@ class Units extends Model<UnitsInterface> implements UnitsInterface {
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
   public deletedAt?: Date;
+  public category?: CategoryInterface;
 }
 
 Units.init(
@@ -40,6 +45,10 @@ Units.init(
       type: DataTypes.STRING,
       allowNull: true,
       unique: true,
+    },
+    category_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
     },
     created_by: {
       type: DataTypes.INTEGER,
@@ -63,7 +72,9 @@ Units.init(
   }
 );
 
-Units.hasMany(SubOutcomes, {foreignKey: "unit_id", as: "subOutcomes"});
+// Units.hasMany(SubOutcomes, {foreignKey: "unit_id", as: "subOutcomes"});
 SubOutcomes.belongsTo(Units, { foreignKey: 'unit_id', as: 'unit' });
+Units.hasMany(MainOutcomes, {foreignKey: "unit_id", as: "mainOutcomes"});
+Units.hasOne(Category, {foreignKey: "id", sourceKey: "category_id", as: "category"});
 
 export default Units;

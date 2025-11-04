@@ -117,6 +117,28 @@ class learnerController {
       res.handler.serverError(error);
     }
   }
+
+  // Assign Status Learner method
+  static async assignStatusLearner(req: Request, res: Response): Promise<void> {
+    try {
+      let learnerId = req.params.id as string | number;
+      let data = req.body;
+      let userData = req.headers["user_info"] as userAuthenticationData;
+      let request = await LearnerService.assignStatusLearner(learnerId, data, userData);
+      if (request.status !== STATUS_CODES.SUCCESS) {
+        res.handler.errorResponse(request.status, request.message);
+        return;
+      }
+      res.handler.successResponse(
+        request.status,
+        request.data,
+        request.message
+      );
+    } catch (error) {
+      error = "server error";
+      res.handler.serverError(error);
+    }
+  }
 }
 
 export default learnerController;

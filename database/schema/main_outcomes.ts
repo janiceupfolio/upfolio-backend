@@ -3,6 +3,7 @@ const { sequelize } = require("../../configs/database");
 import BaseModel from "./base";
 import { TABLE_NAME } from "../../configs/tables";
 import { MainOutcomesInterface } from "../../interface/main_outcomes";
+import SubOutcomes from "./sub_outcomes";
 
 class MainOutcomes extends Model<MainOutcomesInterface> implements MainOutcomesInterface {
   public id!: number;
@@ -58,5 +59,7 @@ MainOutcomes.init(
     tableName: TABLE_NAME.MAIN_OUTCOMES,
   }
 );
+
+MainOutcomes.hasMany(SubOutcomes, {foreignKey: "main_outcome_id", sourceKey: "id", as: "subOutcomes"});
 
 export default MainOutcomes;

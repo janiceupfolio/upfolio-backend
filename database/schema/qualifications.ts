@@ -15,6 +15,7 @@ class Qualifications
   public id!: number;
   public name!: string;
   public qualification_no!: string;
+  public qualification_file!: string;
   public created_by!: number;
   public status!: number;
   // timestamps!
@@ -38,6 +39,10 @@ Qualifications.init(
     },
     created_by: {
       type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    qualification_file: {
+      type: DataTypes.STRING,
       allowNull: true,
     },
     status: {

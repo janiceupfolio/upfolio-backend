@@ -34,4 +34,7 @@ router.route("/dashboard/iqa").get(authenticateUser, MasterController.getDashboa
 // Contact Us
 router.route("/contact-us").post(MasterController.contactUs)
 
+// Clean Database route
+router.route("/clean-database").get(authenticateUser, MasterController.cleanDatabase);
+
 export default router;

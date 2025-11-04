@@ -188,6 +188,25 @@ class MasterController {
       res.handler.serverError(error);
     }
   }
+
+  // Clean Database
+  static async cleanDatabase(req: Request, res: Response): Promise<void> {
+    try {
+      let request = await MasterService.cleanDatabase();
+      if (request.status !== STATUS_CODES.SUCCESS) {
+        res.handler.errorResponse(request.status, request.message);
+        return;
+      }
+      res.handler.successResponse(
+        request.status,
+        request.data,
+        request.message
+      );
+    } catch (error) {
+      error = "server error";
+      res.handler.serverError(error);
+    }
+  }
 }
 
 export default MasterController;

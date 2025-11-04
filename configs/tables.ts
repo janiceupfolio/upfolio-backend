@@ -28,5 +28,6 @@ export const TABLE_NAME = {
   SAMPLING: "tbl_sampling",
   SAMPLING_UNITS: "tbl_sampling_units",
   SAMPLING_ASSESSMENT: "tbl_sampling_assessment",
-  USER_UNITS: "tbl_user_units"
+  USER_UNITS: "tbl_user_units",
+  CATEGORY: "tbl_category"
 };
