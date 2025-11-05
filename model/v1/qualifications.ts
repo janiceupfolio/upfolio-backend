@@ -1047,7 +1047,7 @@ class qualificationService {
         }
         categoryId = categoryData.id;
       } else {
-        categoryData = await Category.create({ category_name: category, is_mandatory: isMandatory }, { transaction });
+        categoryData = await Category.create({ category_name: category, is_mandatory: isMandatory });
         categoryId = categoryData.id;
         category_id_created.push(categoryData.id);
       }
