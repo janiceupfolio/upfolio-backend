@@ -1370,10 +1370,13 @@ class qualificationService {
           attributes: ["id", "name", "qualification_no"]
         });
         qualification = JSON.parse(JSON.stringify(qualification));
-        let userQualification = await UserQualification.findOne({
-          where: { user_id: learnerId, qualification_id: qualificationId },
-          attributes: ["is_signed_off", "is_optional_assigned"]
-        });
+        let userQualification
+        if (learnerId) {
+          userQualification = await UserQualification.findOne({
+            where: { user_id: learnerId, qualification_id: qualificationId },
+            attributes: ["is_signed_off", "is_optional_assigned"]
+          });
+        }
         result = {
           qualification_id: qualification.id,
           qualification_name: qualification.name,
