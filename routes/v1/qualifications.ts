@@ -2,6 +2,8 @@ import express from "express";
 const router = express.Router();
 import { Authenticator } from "../../middleware/authenticator/authenticator";
 import qualificationController from "../../controller/v1/qualifications";
+import validate from "../../middleware/validator/validator";
+import { query } from "express-validator";
 const authenticator = new Authenticator();
 const authenticateUser = authenticator.authenticateUser;
 
@@ -42,6 +44,13 @@ router
 
 router
   .route("/unit-list")
-  .get(authenticateUser, qualificationController.unitList);
+  .get(
+    validate([
+      query("qualification_id").notEmpty().withMessage("Qualification ID is required"),
+      query("learner_id").notEmpty().withMessage("Learner ID is required"),
+    ]),
+    authenticateUser, 
+    qualificationController.unitList
+  );
 
 export default router;
