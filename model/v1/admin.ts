@@ -347,7 +347,7 @@ class AdminService {
     try {
       let adminData = await User.findOne({
         where: { id: adminId, deletedAt: null, role: Roles.ADMIN },
-        attributes: ["id"],
+        attributes: ["id", "default_center_id"],
       });
       if (!adminData) {
         return {
@@ -367,6 +367,11 @@ class AdminService {
         where: { center_admin: adminId },
         force: true,
       });
+      // update default_center_id
+      await User.update(
+        { default_center_id: null },
+        { where: { default_center_id: adminData.default_center_id } }
+      );
       return {
         status: STATUS_CODES.SUCCESS,
         data: {},
