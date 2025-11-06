@@ -631,7 +631,6 @@ class LearnerService {
           required: includeRequiredAssessor,
         });
       }
-
       let userData_ = await User.findAndCountAll({
         where: {
           ...searchOptions,

@@ -191,7 +191,8 @@ class qualificationService {
             const codeCell = sheet[XLSX.utils.encode_cell({ c: 0, r: row })];
             const descCell = sheet[XLSX.utils.encode_cell({ c: 1, r: row })];
 
-            const code = codeCell?.v?.toString().trim();
+            let code = codeCell?.v?.toString().trim();
+            code = code?.replace(/\*+$/, "");
             const description = descCell?.v?.toString().trim();
 
             if (code && /^[0-9]+(\.0+)*$/.test(code)) {
@@ -1070,7 +1071,8 @@ class qualificationService {
         const codeCell = sheet[XLSX.utils.encode_cell({ c: 0, r: row })];
         const descCell = sheet[XLSX.utils.encode_cell({ c: 1, r: row })];
 
-        const code = codeCell?.v?.toString().trim();
+        let code = codeCell?.v?.toString().trim();
+        code = code?.replace(/\*+$/, "");
         const description = descCell?.v?.toString().trim();
 
         if (code && /^[0-9]+(\.0+)*$/.test(code)) {
