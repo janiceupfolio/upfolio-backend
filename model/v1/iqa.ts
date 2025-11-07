@@ -8,6 +8,7 @@ import Qualifications from "../../database/schema/qualifications";
 import UserQualification from "../../database/schema/user_qualification";
 import { emailService } from "../../helper/emailService";
 import Center from "../../database/schema/center";
+import AssessorIQA from "../../database/schema/assessor_iqa";
 const { sequelize } = require("../../configs/database");
 
 class IQAService {
@@ -82,6 +83,14 @@ class IQAService {
           })),
           { transaction }
         );
+        // Create Assessor IQA Association Single Assessor
+        if (data.assessor_id) {
+          await AssessorIQA.create({
+            assessor_id: data.assessor_id,
+            iqa_id: createUser.id,
+            qualification_ids: qualificationIds,
+          }, { transaction });
+        }
       }
       // Send Email to IQA
       await emailService.sendIQAAccountEmail(
