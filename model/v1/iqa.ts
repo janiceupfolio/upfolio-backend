@@ -83,14 +83,32 @@ class IQAService {
           })),
           { transaction }
         );
-        // Create Assessor IQA Association Single Assessor
-        if (data.assessor_id) {
-          await AssessorIQA.create({
-            assessor_id: data.assessor_id,
-            iqa_id: createUser.id,
-            qualification_ids: qualificationIds,
-          }, { transaction });
+      }
+      // ✅ Handle Assessor-IQA associations (merge qualifications by assessor)
+      if (Array.isArray(data.assessor_association) && data.assessor_association.length > 0) {
+        // Group by assessor_id
+        const assessorMap: Record<number, number[]> = {};
+
+        for (const assoc of data.assessor_association) {
+          const assessorId = assoc.assessor_id;
+          const qualificationId = assoc.qualification_id;
+
+          if (!assessorMap[assessorId]) {
+            assessorMap[assessorId] = [];
+          }
+
+          assessorMap[assessorId].push(qualificationId);
         }
+
+        // Convert to array of records for bulk insert
+        const associations = Object.entries(assessorMap).map(([assessorId, qualificationIds]) => ({
+          assessor_id: parseInt(assessorId),
+          iqa_id: createUser.id,
+          qualification_ids: qualificationIds,
+          status: 1, // active/pending etc.
+        }));
+
+        await AssessorIQA.bulkCreate(associations, { transaction });
       }
       // Send Email to IQA
       await emailService.sendIQAAccountEmail(
@@ -116,7 +134,7 @@ class IQAService {
   // Update IQA
   static async updateIQA(
     id: string | number,
-    data: UserInterface,
+    data: any,
     userData: userAuthenticationData
   ) {
     const transaction = await sequelize.transaction();
@@ -165,6 +183,41 @@ class IQAService {
           })),
           { transaction }
         );
+      }
+      // ✅ Handle Assessor-IQA Associations
+      if (Array.isArray(data.assessor_association) && data.assessor_association.length > 0) {
+        // Group by assessor_id and merge qualifications
+        const assessorMap: Record<number, number[]> = {};
+
+        for (const assoc of data.assessor_association) {
+          const assessorId = assoc.assessor_id;
+          const qualificationId = assoc.qualification_id;
+
+          if (!assessorMap[assessorId]) {
+            assessorMap[assessorId] = [];
+          }
+
+          assessorMap[assessorId].push(qualificationId);
+        }
+
+        // Delete old associations for this IQA
+        await AssessorIQA.destroy({
+          where: { iqa_id: id },
+          force: true,
+          transaction,
+        });
+
+        // Create new merged associations
+        const newAssociations = Object.entries(assessorMap).map(
+          ([assessorId, qualificationIds]) => ({
+            assessor_id: parseInt(assessorId),
+            iqa_id: Number(id),
+            qualification_ids: qualificationIds,
+            status: 1,
+          })
+        );
+
+        await AssessorIQA.bulkCreate(newAssociations, { transaction });
       }
       if (data.email && isIQA.email !== data.email) {
         let password = await generateSecurePassword();
@@ -326,10 +379,17 @@ class IQAService {
       let deleteLearner = await User.destroy({
         where: { id },
         force: true,
+        transaction,
       });
       let deleteUserQualification = await UserQualification.destroy({
         where: { user_id: id },
         force: true,
+        transaction,
+      });
+      await AssessorIQA.destroy({
+        where: { iqa_id: id },
+        force: true,
+        transaction,
       });
       await transaction.commit();
       return {
