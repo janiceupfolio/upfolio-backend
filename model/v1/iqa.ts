@@ -324,15 +324,15 @@ class IQAService {
           ...searchOptions,
           ...whereCondition,
         },
-        include: [
-          {
-            model: Qualifications,
-            as: "qualifications",
-            required: qualificationRequired,
-            where: qualificationWhereCondition,
-            through: { attributes: [] }, // prevent including join table info
-          },
-        ],
+        // include: [
+        //   {
+        //     model: Qualifications,
+        //     as: "qualifications",
+        //     required: qualificationRequired,
+        //     where: qualificationWhereCondition,
+        //     through: { attributes: [] }, // prevent including join table info
+        //   },
+        // ],
         limit: fetchAll ? undefined : limit,
         offset: fetchAll ? undefined : offset,
         order,
@@ -413,6 +413,98 @@ class IQAService {
       };
     }
   }
+
+  // Get IQA
+  static async getIQA(id, userData) {
+    try {
+      // 1️⃣ Find IQA user
+      const iqa = await User.findOne({
+        where: { id },
+        attributes: [
+          "id",
+          "name",
+          "surname",
+          "phone_code",
+          "phone_number",
+          "email",
+          "trainee",
+          "additional_iqa_id"
+        ]
+      });
+
+      if (!iqa) {
+        return {
+          status: STATUS_CODES.NOT_FOUND,
+          message: "IQA not found",
+        };
+      }
+
+      // 2️⃣ Fetch all Assessor–IQA mappings
+      const assessorIQAList = await AssessorIQA.findAll({
+        where: { iqa_id: iqa.id },
+        attributes: ["id", "assessor_id", "qualification_ids"],
+        raw: true,
+      });
+
+      const assessorAssociations = [];
+
+      // 3️⃣ Construct detailed associations
+      for (const record of assessorIQAList) {
+        // Handle qualification_ids stored as JSON string
+        let qualificationIds = [];
+        if (typeof record.qualification_ids === "string") {
+          try {
+            qualificationIds = JSON.parse(record.qualification_ids);
+          } catch (err) {
+            console.warn("Invalid JSON in qualification_ids:", record.qualification_ids);
+          }
+        } else if (Array.isArray(record.qualification_ids)) {
+          qualificationIds = record.qualification_ids;
+        }
+
+        if (!qualificationIds.length) continue;
+
+        // Fetch assessor details
+        const assessor = await User.findOne({
+          where: { id: record.assessor_id, role: Roles.ASSESSOR, deletedAt: null },
+          attributes: ["id", "name", "surname"],
+          raw: true,
+        });
+
+        // Fetch qualifications
+        const qualifications = await Qualifications.findAll({
+          where: { id: qualificationIds },
+          attributes: ["id", "name", "qualification_no"],
+          raw: true,
+        });
+
+        // Combine assessor + qualification data
+        for (const qualification of qualifications) {
+          assessorAssociations.push({
+            qualification,
+            assessor,
+          });
+        }
+      }
+
+      // ✅ Final response
+      return {
+        status: STATUS_CODES.SUCCESS,
+        message: "IQA detail fetched successfully",
+        data: {
+          ...iqa.dataValues,
+          assessor_association: assessorAssociations,
+        },
+      };
+    } catch (error) {
+      console.error("getIQA Error:", error);
+      return {
+        status: STATUS_CODES.SERVER_ERROR,
+        message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
+
 }
 
 export default IQAService;
