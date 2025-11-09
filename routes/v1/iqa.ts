@@ -36,6 +36,6 @@ router.route("/list").get(authenticateUser, IQAController.listIQA);
 router.route("/delete/:id").delete(authenticateUser, IQAController.deleteIQA);
 
 // Get IQA route
-router.route("/get/:id").get(authenticateUser, IQAController.getIQA)
+router.route("/detail/:id").get(authenticateUser, IQAController.getIQA)
 
 export default router;
