@@ -8,6 +8,7 @@ import Qualifications from "../../database/schema/qualifications";
 import UserQualification from "../../database/schema/user_qualification";
 import { emailService } from "../../helper/emailService";
 import Center from "../../database/schema/center";
+import AssessorIQA from "../../database/schema/assessor_iqa";
 const { sequelize } = require("../../configs/database");
 
 class IQAService {
@@ -83,6 +84,35 @@ class IQAService {
           { transaction }
         );
       }
+      // ✅ Handle Assessor-IQA associations (merge qualifications by assessor)
+      if (typeof data.assessor_association === 'string') {
+        data.assessor_association = JSON.parse(data.assessor_association);
+      }
+      if (Array.isArray(data.assessor_association) && data.assessor_association.length > 0) {
+        // Group by assessor_id
+        const assessorMap: Record<number, number[]> = {};
+
+        for (const assoc of data.assessor_association) {
+          const assessorId = assoc.assessor_id;
+          const qualificationId = assoc.qualification_id;
+
+          if (!assessorMap[assessorId]) {
+            assessorMap[assessorId] = [];
+          }
+
+          assessorMap[assessorId].push(qualificationId);
+        }
+
+        // Convert to array of records for bulk insert
+        const associations = Object.entries(assessorMap).map(([assessorId, qualificationIds]) => ({
+          assessor_id: parseInt(assessorId),
+          iqa_id: createUser.id,
+          qualification_ids: qualificationIds,
+          status: 1, // active/pending etc.
+        }));
+        console.log(associations)
+        await AssessorIQA.bulkCreate(associations, { transaction });
+      }
       // Send Email to IQA
       await emailService.sendIQAAccountEmail(
         createUser.name,
@@ -107,7 +137,7 @@ class IQAService {
   // Update IQA
   static async updateIQA(
     id: string | number,
-    data: UserInterface,
+    data: any,
     userData: userAuthenticationData
   ) {
     const transaction = await sequelize.transaction();
@@ -156,6 +186,45 @@ class IQAService {
           })),
           { transaction }
         );
+      }
+      // ✅ Handle Assessor-IQA associations (merge qualifications by assessor)
+      if (typeof data.assessor_association === 'string') {
+        data.assessor_association = JSON.parse(data.assessor_association);
+      }
+      // ✅ Handle Assessor-IQA Associations
+      if (Array.isArray(data.assessor_association) && data.assessor_association.length > 0) {
+        // Group by assessor_id and merge qualifications
+        const assessorMap: Record<number, number[]> = {};
+
+        for (const assoc of data.assessor_association) {
+          const assessorId = assoc.assessor_id;
+          const qualificationId = assoc.qualification_id;
+
+          if (!assessorMap[assessorId]) {
+            assessorMap[assessorId] = [];
+          }
+
+          assessorMap[assessorId].push(qualificationId);
+        }
+
+        // Delete old associations for this IQA
+        await AssessorIQA.destroy({
+          where: { iqa_id: id },
+          force: true,
+          transaction,
+        });
+
+        // Create new merged associations
+        const newAssociations = Object.entries(assessorMap).map(
+          ([assessorId, qualificationIds]) => ({
+            assessor_id: parseInt(assessorId),
+            iqa_id: Number(id),
+            qualification_ids: qualificationIds,
+            status: 1,
+          })
+        );
+
+        await AssessorIQA.bulkCreate(newAssociations, { transaction });
       }
       if (data.email && isIQA.email !== data.email) {
         let password = await generateSecurePassword();
@@ -255,15 +324,15 @@ class IQAService {
           ...searchOptions,
           ...whereCondition,
         },
-        include: [
-          {
-            model: Qualifications,
-            as: "qualifications",
-            required: qualificationRequired,
-            where: qualificationWhereCondition,
-            through: { attributes: [] }, // prevent including join table info
-          },
-        ],
+        // include: [
+        //   {
+        //     model: Qualifications,
+        //     as: "qualifications",
+        //     required: qualificationRequired,
+        //     where: qualificationWhereCondition,
+        //     through: { attributes: [] }, // prevent including join table info
+        //   },
+        // ],
         limit: fetchAll ? undefined : limit,
         offset: fetchAll ? undefined : offset,
         order,
@@ -317,10 +386,17 @@ class IQAService {
       let deleteLearner = await User.destroy({
         where: { id },
         force: true,
+        transaction,
       });
       let deleteUserQualification = await UserQualification.destroy({
         where: { user_id: id },
         force: true,
+        transaction,
+      });
+      await AssessorIQA.destroy({
+        where: { iqa_id: id },
+        force: true,
+        transaction,
       });
       await transaction.commit();
       return {
@@ -337,6 +413,98 @@ class IQAService {
       };
     }
   }
+
+  // Get IQA
+  static async getIQA(id, userData) {
+    try {
+      // 1️⃣ Find IQA user
+      const iqa = await User.findOne({
+        where: { id },
+        attributes: [
+          "id",
+          "name",
+          "surname",
+          "phone_code",
+          "phone_number",
+          "email",
+          "trainee",
+          "additional_iqa_id"
+        ]
+      });
+
+      if (!iqa) {
+        return {
+          status: STATUS_CODES.NOT_FOUND,
+          message: "IQA not found",
+        };
+      }
+
+      // 2️⃣ Fetch all Assessor–IQA mappings
+      const assessorIQAList = await AssessorIQA.findAll({
+        where: { iqa_id: iqa.id },
+        attributes: ["id", "assessor_id", "qualification_ids"],
+        raw: true,
+      });
+
+      const assessorAssociations = [];
+
+      // 3️⃣ Construct detailed associations
+      for (const record of assessorIQAList) {
+        // Handle qualification_ids stored as JSON string
+        let qualificationIds = [];
+        if (typeof record.qualification_ids === "string") {
+          try {
+            qualificationIds = JSON.parse(record.qualification_ids);
+          } catch (err) {
+            console.warn("Invalid JSON in qualification_ids:", record.qualification_ids);
+          }
+        } else if (Array.isArray(record.qualification_ids)) {
+          qualificationIds = record.qualification_ids;
+        }
+
+        if (!qualificationIds.length) continue;
+
+        // Fetch assessor details
+        const assessor = await User.findOne({
+          where: { id: record.assessor_id, role: Roles.ASSESSOR, deletedAt: null },
+          attributes: ["id", "name", "surname"],
+          raw: true,
+        });
+
+        // Fetch qualifications
+        const qualifications = await Qualifications.findAll({
+          where: { id: qualificationIds },
+          attributes: ["id", "name", "qualification_no"],
+          raw: true,
+        });
+
+        // Combine assessor + qualification data
+        for (const qualification of qualifications) {
+          assessorAssociations.push({
+            qualification,
+            assessor,
+          });
+        }
+      }
+
+      // ✅ Final response
+      return {
+        status: STATUS_CODES.SUCCESS,
+        message: "IQA detail fetched successfully",
+        data: {
+          ...iqa.dataValues,
+          assessor_association: assessorAssociations,
+        },
+      };
+    } catch (error) {
+      console.error("getIQA Error:", error);
+      return {
+        status: STATUS_CODES.SERVER_ERROR,
+        message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
+
 }
 
 export default IQAService;

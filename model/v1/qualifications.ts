@@ -191,7 +191,8 @@ class qualificationService {
             const codeCell = sheet[XLSX.utils.encode_cell({ c: 0, r: row })];
             const descCell = sheet[XLSX.utils.encode_cell({ c: 1, r: row })];
 
-            const code = codeCell?.v?.toString().trim();
+            let code = codeCell?.v?.toString().trim();
+            code = code?.replace(/\*+$/, "");
             const description = descCell?.v?.toString().trim();
 
             if (code && /^[0-9]+(\.0+)*$/.test(code)) {
@@ -862,38 +863,7 @@ class qualificationService {
         };
       }
 
-      // Delete previous main outcomes
-      await MainOutcomes.destroy({
-        where: { qualification_id: qualificationId },
-        force: true,
-        transaction,
-      });
-
-      // Delete previous related data (force delete)
-      await OutcomeSubpoints.destroy({
-        where: {
-          outcome_id: {
-            [Op.in]: Sequelize.literal(
-              `(SELECT id FROM tbl_sub_outcomes WHERE qualification_id = ${qualificationId})`
-            ),
-          },
-        },
-        force: true,
-        transaction,
-      });
-
-      await SubOutcomes.destroy({
-        where: { qualification_id: qualificationId },
-        force: true,
-        transaction,
-      });
-
-      await Units.destroy({
-        where: { qualification_id: qualificationId },
-        force: true,
-        transaction,
-      });
-
+      // Update qualification name and number
       await Qualifications.update(
         {
           name: qualificationName,
@@ -908,18 +878,18 @@ class qualificationService {
         transaction,
       });
 
-      // Now insert new data using modified createQualification that accepts workbook + transaction
-      const created = await this._createQualificationWithWorkbook(
+      // Now update units and outcomes using the new update method
+      const updated = await this._updateQualificationWithWorkbook(
         workbook,
         userData,
         transaction,
         qualificationData.id
       );
-      if (created && created.status && created.status !== 200) {
+      if (updated && updated.status && updated.status !== STATUS_CODES.SUCCESS) {
         await transaction.rollback()
         return {
-          status: created.status,
-          message: created.message
+          status: updated.status,
+          message: updated.message
         }
       }
       // upload file on AWS
@@ -932,7 +902,7 @@ class qualificationService {
       await transaction.commit();
       return {
         status: STATUS_CODES.SUCCESS,
-        data: created.data,
+        data: updated.data,
         message: "Qualification updated successfully.",
       };
     } catch (error) {
@@ -944,6 +914,285 @@ class qualificationService {
       };
     }
   }
+
+  // Update qualification with workbook - updates units instead of deleting them
+  private static async _updateQualificationWithWorkbook(
+    workbook: XLSX.WorkBook,
+    userData: userAuthenticationData,
+    transaction: any,
+    qualificationId: number
+  ): Promise<any> {
+    const sheetName = workbook.SheetNames[0];
+    const firstSheet = workbook.Sheets[sheetName];
+    const qualificationName = firstSheet["B1"]?.v?.toString().trim() || "";
+    const qualificationNumber = firstSheet["B2"]?.v?.toString().trim() || "";
+
+    // Fetch existing units for this qualification
+    const existingUnits = await Units.findAll({
+      where: { qualification_id: qualificationId, deletedAt: null },
+      attributes: ["id", "unit_ref_no", "unit_title", "unit_number", "category_id"],
+      transaction,
+    });
+
+    // Create a map of existing units by unit_ref_no for quick lookup
+    const existingUnitsMap = new Map<string, any>();
+    existingUnits.forEach(unit => {
+      existingUnitsMap.set(unit.unit_ref_no, unit);
+    });
+
+    // Track processed unit_ref_no values within this Excel file to detect duplicates
+    const processedUnitRefNos = new Map<string, string>(); // Map<unit_ref_no, sheetName>
+    let category_id_created = []; // Track the id of the category that was created
+    let hasMandatoryUnit = false; // Track if at least one mandatory unit exists
+    const processedUnitIds = new Set<number>(); // Track which existing units were updated
+
+    for (const sheetName of workbook.SheetNames) {
+      if (sheetName.toLowerCase() === "front page" || sheetName.toLowerCase() === "frontpage") continue;
+      const sheet = workbook.Sheets[sheetName];
+
+      const unitNo = sheet["B1"]?.v?.toString().trim() || "";
+      const unitName = sheet["B2"]?.v?.toString().trim() || "";
+      const unitRefNo = sheet["B3"]?.v?.toString().trim() || "";
+      const category = sheet["B4"]?.v?.toString().trim() || "";
+      const isMandatory = (sheet["B5"]?.v?.toString().trim() || "") === "Yes" ? true : false;
+
+      if (isMandatory) {
+        hasMandatoryUnit = true;
+      }
+
+      if (!unitRefNo) {
+        return {
+          status: STATUS_CODES.BAD_REQUEST,
+          message: `Unit Reference Number is missing for unit ${unitNo} in sheet '${sheetName}'`,
+        };
+      }
+
+      // Check for duplicate unit_ref_no within the Excel file
+      if (processedUnitRefNos.has(unitRefNo)) {
+        const duplicateSheetName = processedUnitRefNos.get(unitRefNo);
+        return {
+          status: STATUS_CODES.BAD_REQUEST,
+          message: `Duplicate Unit Reference Number '${unitRefNo}' found in Excel file. First occurrence in sheet '${duplicateSheetName}' (Unit ${unitNo}), duplicate in sheet '${sheetName}' (Unit ${unitNo}). Please remove the duplicate.`,
+        };
+      }
+
+      // Mark this unit_ref_no as processed
+      processedUnitRefNos.set(unitRefNo, sheetName);
+
+      // Check if unit_ref_no already exists in this qualification
+      const existingUnit = existingUnitsMap.get(unitRefNo);
+      let unitData;
+
+      if (existingUnit) {
+        // Unit exists - UPDATE it instead of deleting
+        // First, delete existing outcomes and subpoints for this unit
+        const existingSubOutcomes = await SubOutcomes.findAll({
+          where: { unit_id: existingUnit.id, deletedAt: null },
+          attributes: ["id"],
+          transaction,
+        });
+        const existingSubOutcomeIds = existingSubOutcomes.map(so => so.id);
+
+        if (existingSubOutcomeIds.length > 0) {
+          await OutcomeSubpoints.destroy({
+            where: { outcome_id: { [Op.in]: existingSubOutcomeIds } },
+            force: true,
+            transaction,
+          });
+        }
+
+        await SubOutcomes.destroy({
+          where: { unit_id: existingUnit.id },
+          force: true,
+          transaction,
+        });
+
+        await MainOutcomes.destroy({
+          where: { unit_id: existingUnit.id },
+          force: true,
+          transaction,
+        });
+
+        // Get or create category
+        let categoryId: number | null = null;
+        let categoryData = await Category.findOne({
+          where: {
+            category_name: {
+              [Op.like]: category
+            }
+          },
+          transaction,
+        });
+        if (categoryData) {
+          if (categoryData.is_mandatory !== isMandatory) {
+            return {
+              status: STATUS_CODES.BAD_REQUEST,
+              message: "Category already exists but is mandatory is different. Please update the category mandatory status."
+            }
+          }
+          categoryId = categoryData.id;
+        } else {
+          categoryData = await Category.create({ category_name: category, is_mandatory: isMandatory }, { transaction });
+          categoryId = categoryData.id;
+          category_id_created.push(categoryData.id);
+        }
+
+        // Update the existing unit
+        await Units.update(
+          {
+            unit_title: unitName,
+            unit_number: unitNo,
+            category_id: categoryId,
+          },
+          {
+            where: { id: existingUnit.id },
+            transaction,
+          }
+        );
+
+        // Fetch the updated unit
+        unitData = await Units.findByPk(existingUnit.id, { transaction });
+        processedUnitIds.add(existingUnit.id);
+      } else {
+        // Unit doesn't exist - check if unit_ref_no exists in another qualification
+        const unitInOtherQualification = await Units.findOne({
+          where: { unit_ref_no: unitRefNo, deletedAt: null },
+          attributes: ["id", "qualification_id"],
+          transaction,
+        });
+
+        if (unitInOtherQualification && unitInOtherQualification.qualification_id !== qualificationId) {
+          return {
+            status: STATUS_CODES.BAD_REQUEST,
+            message: `Unit Reference Number '${unitRefNo}' already exists in another qualification for unit ${unitNo}`,
+          };
+        }
+
+        // Get or create category
+        let categoryId: number | null = null;
+        let categoryData = await Category.findOne({
+          where: {
+            category_name: {
+              [Op.like]: category
+            }
+          },
+          transaction,
+        });
+        if (categoryData) {
+          if (categoryData.is_mandatory !== isMandatory) {
+            return {
+              status: STATUS_CODES.BAD_REQUEST,
+              message: "Category already exists but is mandatory is different. Please update the category mandatory status."
+            }
+          }
+          categoryId = categoryData.id;
+        } else {
+          categoryData = await Category.create({ category_name: category, is_mandatory: isMandatory }, { transaction });
+          categoryId = categoryData.id;
+          category_id_created.push(categoryData.id);
+        }
+
+        // Create new unit
+        unitData = await Units.create(
+          {
+            qualification_id: qualificationId,
+            unit_title: unitName,
+            unit_number: unitNo,
+            unit_ref_no: unitRefNo,
+            category_id: categoryId,
+            created_by: userData.id,
+          },
+          { transaction }
+        );
+      }
+
+      // Create outcomes and subpoints for this unit (same logic as create)
+      const range = XLSX.utils.decode_range(sheet["!ref"] || "");
+      let currentSubOutcomeId: number | null = null;
+      let currentMainOutcomeId: number | null = null;
+      for (let row = 6; row <= range.e.r; row++) {
+        const codeCell = sheet[XLSX.utils.encode_cell({ c: 0, r: row })];
+        const descCell = sheet[XLSX.utils.encode_cell({ c: 1, r: row })];
+
+        let code = codeCell?.v?.toString().trim();
+        code = code?.replace(/\*+$/, "");
+        const description = descCell?.v?.toString().trim();
+
+        if (code && /^[0-9]+(\.0+)*$/.test(code)) {
+          const mainOutcome = await MainOutcomes.create({
+            unit_id: unitData.id,
+            qualification_id: qualificationId,
+            main_number: code,
+            description: description || "",
+            created_by: userData.id,
+          }, { transaction });
+          currentMainOutcomeId = mainOutcome.id;
+        } else if (code && /^[0-9]+\.[0-9]+$/.test(code)) {
+          const subOutCome = await SubOutcomes.create(
+            {
+              unit_id: unitData.id,
+              qualification_id: qualificationId,
+              description: description || "",
+              outcome_number: code,
+              created_by: userData.id,
+              main_outcome_id: currentMainOutcomeId,
+            },
+            { transaction }
+          );
+          currentSubOutcomeId = subOutCome.id;
+        } else if (currentSubOutcomeId && !code && description) {
+          const cleanedDescription = this.cleanDescriptionText(description);
+
+          // Only create SubPoints if the cleaned description is not empty
+          if (cleanedDescription && cleanedDescription.length > 0) {
+            await OutcomeSubpoints.create(
+              {
+                outcome_id: currentSubOutcomeId,
+                point_text: cleanedDescription,
+                created_by: userData.id,
+              },
+              { transaction }
+            );
+          }
+        }
+      }
+    }
+
+    if (!hasMandatoryUnit) {
+      /**
+       * Need to delete the category that was created if it was created
+       * because category is created and we can not add transection in category model
+       * for that reason we are deleting the category that was created if it was created
+       * and if we did not delete then if user try to add another qualification with same category then it will give error
+       */
+      if (category_id_created.length > 0) {
+        await Category.destroy({ where: { id: { [Op.in]: category_id_created } }, force: true });
+      }
+      return {
+        status: STATUS_CODES.BAD_REQUEST,
+        message: "At least one mandatory unit is required in the Excel file.",
+      };
+    }
+
+    // Note: Units that exist in DB but not in Excel are left as-is
+    // This preserves relationships with UserUnits, AssessmentUnits, etc.
+    // If you want to soft-delete them, uncomment the following:
+    // const unitsToSoftDelete = existingUnits.filter(u => !processedUnitIds.has(u.id));
+    // if (unitsToSoftDelete.length > 0) {
+    //   await Units.update(
+    //     { deletedAt: new Date() },
+    //     { where: { id: { [Op.in]: unitsToSoftDelete.map(u => u.id) } }, transaction }
+    //   );
+    // }
+
+    const qualificationData = await Qualifications.findByPk(qualificationId, { transaction });
+    return {
+      status: STATUS_CODES.SUCCESS,
+      message: "Success",
+      data: qualificationData
+    };
+  }
+
   private static async _createQualificationWithWorkbook(
     workbook: XLSX.WorkBook,
     userData: userAuthenticationData,
@@ -1070,7 +1319,8 @@ class qualificationService {
         const codeCell = sheet[XLSX.utils.encode_cell({ c: 0, r: row })];
         const descCell = sheet[XLSX.utils.encode_cell({ c: 1, r: row })];
 
-        const code = codeCell?.v?.toString().trim();
+        let code = codeCell?.v?.toString().trim();
+        code = code?.replace(/\*+$/, "");
         const description = descCell?.v?.toString().trim();
 
         if (code && /^[0-9]+(\.0+)*$/.test(code)) {

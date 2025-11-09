@@ -8,6 +8,7 @@ import User from "../../database/schema/user";
 import Qualifications from "../../database/schema/qualifications";
 import UserQualification from "../../database/schema/user_qualification";
 import Center from "../../database/schema/center";
+import AssessorIQA from "../../database/schema/assessor_iqa";
 const { sequelize } = require("../../configs/database");
 
 class AssessorService {
@@ -19,7 +20,12 @@ class AssessorService {
     const transaction = await sequelize.transaction();
     try {
       // @ts-ignore
-      if (data.id === null || data.id === undefined || data.id === 0 || data.id === '') {
+      if (
+        data.id === null ||
+        data.id === undefined ||
+        data.id === 0 ||
+        data.id === ""
+      ) {
         delete data.id;
       }
       // Check if email already used
@@ -30,12 +36,12 @@ class AssessorService {
           [Op.or]: [
             {
               center_id: userData.center_id,
-              role: Roles.ASSESSOR
+              role: Roles.ASSESSOR,
             },
             {
               center_id: { [Op.ne]: userData.center_id },
-            }
-          ]
+            },
+          ],
         },
         attributes: ["id"],
       });
@@ -137,12 +143,12 @@ class AssessorService {
           [Op.or]: [
             {
               center_id: userData.center_id,
-              role: Roles.ASSESSOR
+              role: Roles.ASSESSOR,
             },
             {
               center_id: { [Op.ne]: userData.center_id },
-            }
-          ]
+            },
+          ],
         },
       });
       if (isEmailUsed) {
@@ -184,7 +190,7 @@ class AssessorService {
         // Remove old qualifications
         await UserQualification.destroy({
           where: { user_id: userId },
-          force: true
+          force: true,
         });
 
         // Insert updated qualifications
@@ -198,22 +204,25 @@ class AssessorService {
       if (data.email && isValidUser.email !== data.email) {
         // Gernate Password
         let password = await generateSecurePassword();
-        await User.update({ password: password }, { where: { id: isValidUser.id }, transaction })
+        await User.update(
+          { password: password },
+          { where: { id: isValidUser.id }, transaction }
+        );
         await emailService.sendAssessorAccountEmail(
           data.name,
           data.email,
           password
         );
       }
-      await transaction.commit()
+      await transaction.commit();
       return {
         data: {},
         status: STATUS_CODES.SUCCESS,
         message: "Assessor Updated Successfully",
       };
     } catch (error) {
-      console.log(error)
-      await transaction.rollback()
+      console.log(error);
+      await transaction.rollback();
       return {
         status: STATUS_CODES.SERVER_ERROR,
         message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
@@ -254,7 +263,9 @@ class AssessorService {
       }
       if (data?.qualification_ids) {
         qualificationWhereCondition.id = {
-          [Op.in]: data.qualification_ids.split(",").map((id) => parseInt(id.trim())),
+          [Op.in]: data.qualification_ids
+            .split(",")
+            .map((id) => parseInt(id.trim())),
         };
         qualificationRequired = true;
       }
@@ -263,7 +274,7 @@ class AssessorService {
 
       let searchOptions = {};
       if (search) {
-        let cleanSearch = search.replace(/\D/g, '');
+        let cleanSearch = search.replace(/\D/g, "");
         searchOptions = {
           [Op.or]: [
             { name: { [Op.like]: `%${search}%` } },
@@ -271,24 +282,30 @@ class AssessorService {
             { email: { [Op.like]: `%${search}%` } },
             { phone_number: { [Op.like]: `%${search}%` } },
             { phone_code: { [Op.like]: `%${search}%` } },
-            Sequelize.literal(`CONCAT(User.name, ' ', User.surname) LIKE '%${search}%'`),
-            Sequelize.literal(`CONCAT(User.phone_code, ' ', User.phone_number) LIKE '%${search}%'`),
+            Sequelize.literal(
+              `CONCAT(User.name, ' ', User.surname) LIKE '%${search}%'`
+            ),
+            Sequelize.literal(
+              `CONCAT(User.phone_code, ' ', User.phone_number) LIKE '%${search}%'`
+            ),
             // // Search for phone number without country code
             // Sequelize.literal(`User.phone_number LIKE '%${cleanSearch}%'`),
             // Search for concatenated phone code and number without space
-            Sequelize.literal(`CONCAT(User.phone_code, User.phone_number) LIKE '%${search}%'`),
+            Sequelize.literal(
+              `CONCAT(User.phone_code, User.phone_number) LIKE '%${search}%'`
+            ),
             // // Search for concatenated phone code and number with space
             // Sequelize.literal(`CONCAT(User.phone_code, ' ', User.phone_number) LIKE '%${search}%'`),
             // // Search for phone number with country code (digits only)
             // Sequelize.literal(`CONCAT(REPLACE(User.phone_code, '+', ''), User.phone_number) LIKE '%${cleanSearch}%'`),
-          ]
+          ],
         };
       }
-      let assessorRequired = false
-      let throughWhere: any = {}
+      let assessorRequired = false;
+      let throughWhere: any = {};
       if (data.learner_id) {
-        assessorRequired = true
-        throughWhere.user_id = data.learner_id
+        assessorRequired = true;
+        throughWhere.user_id = data.learner_id;
       }
 
       let userData_ = await User.findAndCountAll({
@@ -308,11 +325,11 @@ class AssessorService {
             model: User,
             as: "learner",
             required: assessorRequired,
-            through: { 
+            through: {
               attributes: [],
-              where: throughWhere
+              where: throughWhere,
             },
-          }
+          },
         ],
         limit: fetchAll ? undefined : limit,
         offset: fetchAll ? undefined : offset,
@@ -326,10 +343,10 @@ class AssessorService {
         pagination: pagination,
         center_data: center_data
           ? {
-            id: center_data.id,
-            center_name: center_data.center_name,
-            center_address: center_data.center_address,
-          }
+              id: center_data.id,
+              center_name: center_data.center_name,
+              center_address: center_data.center_address,
+            }
           : {},
       };
       return {
@@ -364,16 +381,144 @@ class AssessorService {
       }
       let deleteAssessor = await User.destroy({
         where: { id: assessorId },
-        force: true
+        force: true,
       });
       let deleteUserQualification = await UserQualification.destroy({
         where: { user_id: assessorId },
-        force: true
+        force: true,
       });
       return {
         status: STATUS_CODES.SUCCESS,
         data: {},
         message: "Assessor deleted successfully",
+      };
+    } catch (error) {
+      console.log(error);
+      return {
+        status: STATUS_CODES.SERVER_ERROR,
+        message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
+
+  static async getRemainingIQAAssociateList(
+    data: any,
+    userData: userAuthenticationData
+  ) {
+    try {
+      let qualificationIds = data.qualification_ids
+        .split(",")
+        .map((id) => parseInt(id.trim()))
+        .filter(Boolean);
+      if (qualificationIds.length === 0) {
+        return {
+          status: STATUS_CODES.BAD_REQUEST,
+          message: "Qualification IDs are required",
+        };
+      }
+      let centerId = data.center_id ? data.center_id : userData.center_id;
+      if (!centerId) {
+        return {
+          status: STATUS_CODES.BAD_REQUEST,
+          message: "Center ID is required",
+        };
+      }
+      let assessorList = await User.findAll({
+        where: {
+          center_id: centerId,
+          role: Roles.ASSESSOR,
+          deletedAt: null,
+        },
+      });
+      if (assessorList.length === 0) {
+        return {
+          status: STATUS_CODES.SUCCESS,
+          data: [],
+          message: "No assessor found",
+        };
+      }
+      let assessorIds = assessorList.map((assessor) => assessor.id);
+      let userQualificationData = await UserQualification.findAll({
+        where: {
+          qualification_id: { [Op.in]: qualificationIds },
+          user_id: { [Op.in]: assessorIds },
+        },
+        attributes: ["user_id", "qualification_id"],
+      });
+      if (userQualificationData.length === 0) {
+        return {
+          status: STATUS_CODES.SUCCESS,
+          data: [],
+          message: "No user qualification found",
+        };
+      }
+      
+      // Group by user_id and count qualifications to find assessors who have ALL qualifications (AND condition)
+      const assessorQualificationMap = new Map<number, Set<number>>();
+      userQualificationData.forEach((uq) => {
+        const userId = uq.user_id;
+        if (!assessorQualificationMap.has(userId)) {
+          assessorQualificationMap.set(userId, new Set());
+        }
+        assessorQualificationMap.get(userId)!.add(uq.qualification_id);
+      });
+      
+      // Only include assessors who have ALL requested qualifications
+      let remainingAssessorIds = Array.from(assessorQualificationMap.entries())
+        .filter(([userId, qualSet]) => {
+          // Check if this assessor has ALL the requested qualifications
+          return qualificationIds.every((qid) => qualSet.has(qid));
+        })
+        .map(([userId]) => userId);
+      
+      if (remainingAssessorIds.length === 0) {
+        return {
+          status: STATUS_CODES.SUCCESS,
+          data: [],
+          message: "No assessor found with all requested qualifications",
+        };
+      }
+      
+      // Get assessors which are already associated with IQA for these qualifications
+      // Exclude assessors if ANY of the requested qualifications overlap with their existing IQA assignment
+      let associatedAssessorIQAData = await AssessorIQA.findAll({
+        where: {
+          assessor_id: { [Op.in]: remainingAssessorIds },
+          deletedAt: null,
+        },
+        attributes: ["assessor_id", "qualification_ids"],
+      });
+      
+      // Filter assessors whose qualification_ids contain ANY of the requested qualificationIds
+      // If an assessor is already assigned with any of the requested qualifications, exclude them
+      let associatedAssessorIds: number[] = [];
+      associatedAssessorIQAData.forEach((assessorIQA) => {
+        const assessorQualificationIds = assessorIQA.qualification_ids || [];
+        // Check if ANY of the requested qualification IDs exist in this assessor's qualification_ids
+        const hasAnyQualification = qualificationIds.some((qid) =>
+          assessorQualificationIds.includes(qid)
+        );
+        if (hasAnyQualification) {
+          associatedAssessorIds.push(assessorIQA.assessor_id);
+        }
+      });
+      
+      // Get remaining assessors (those not associated with IQA for these qualifications)
+      // If no assessors are associated, return all assessors with these qualifications
+      let finalAssessorIds = remainingAssessorIds.filter(
+        (id) => !associatedAssessorIds.includes(id)
+      );
+      
+      let remainingAssessorList = await User.findAll({
+        where: {
+          id: { [Op.in]: finalAssessorIds },
+        },
+        attributes: ["id", "name", "surname"],
+      });
+      return {
+        status: STATUS_CODES.SUCCESS,
+        data: remainingAssessorList,
+        message: "Remaining IQA Associate List fetched successfully",
       };
     } catch (error) {
       console.log(error);

@@ -89,6 +89,27 @@ class IQAController {
       res.handler.serverError(error);
     }
   }
+
+  // Get IQA method
+  static async getIQA(req: Request, res: Response): Promise<void> {
+    try {
+      let id = req.params.id;
+      let userData = req.headers["user_info"] as userAuthenticationData;
+      let request = await IQAService.getIQA(id, userData);
+      if (request.status !== STATUS_CODES.SUCCESS) {
+        res.handler.errorResponse(request.status, request.message);
+        return;
+      }
+      res.handler.successResponse(
+        request.status,
+        request.data,
+        request.message
+      );
+    } catch (error) {
+      error = "server error";
+      res.handler.serverError(error);
+    }
+  }
 }
 
 export default IQAController;

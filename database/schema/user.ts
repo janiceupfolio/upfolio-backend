@@ -39,7 +39,7 @@ class User extends Model<UserInterface> implements UserInterface {
   public additional_iqa_id!: number; // Optional field for additional IQA ID
   public additional_assessor_id!: number; // Optional field for additional Assessor ID
   public additional_learning_text!: string;
-  public default_center?: number; // Optional field for default center
+  public default_center_id?: number; // Optional field for default center
   public additional_learning_needs!: number; // 1: Yes | 2: No | 3: Prefer not to say
   public license_year!: number;
   public license_year_expiry!: string;
