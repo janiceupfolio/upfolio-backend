@@ -324,15 +324,15 @@ class IQAService {
           ...searchOptions,
           ...whereCondition,
         },
-        // include: [
-        //   {
-        //     model: Qualifications,
-        //     as: "qualifications",
-        //     required: qualificationRequired,
-        //     where: qualificationWhereCondition,
-        //     through: { attributes: [] }, // prevent including join table info
-        //   },
-        // ],
+        include: [
+          {
+            model: Qualifications,
+            as: "qualifications",
+            required: qualificationRequired,
+            where: qualificationWhereCondition,
+            through: { attributes: [] }, // prevent including join table info
+          },
+        ],
         limit: fetchAll ? undefined : limit,
         offset: fetchAll ? undefined : offset,
         order,
