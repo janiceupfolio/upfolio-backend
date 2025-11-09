@@ -85,6 +85,9 @@ class IQAService {
         );
       }
       // ✅ Handle Assessor-IQA associations (merge qualifications by assessor)
+      if (typeof data.assessor_association === 'string') {
+        data.assessor_association = JSON.parse(data.assessor_association);
+      }
       if (Array.isArray(data.assessor_association) && data.assessor_association.length > 0) {
         // Group by assessor_id
         const assessorMap: Record<number, number[]> = {};
@@ -107,7 +110,7 @@ class IQAService {
           qualification_ids: qualificationIds,
           status: 1, // active/pending etc.
         }));
-
+        console.log(associations)
         await AssessorIQA.bulkCreate(associations, { transaction });
       }
       // Send Email to IQA
@@ -183,6 +186,10 @@ class IQAService {
           })),
           { transaction }
         );
+      }
+      // ✅ Handle Assessor-IQA associations (merge qualifications by assessor)
+      if (typeof data.assessor_association === 'string') {
+        data.assessor_association = JSON.parse(data.assessor_association);
       }
       // ✅ Handle Assessor-IQA Associations
       if (Array.isArray(data.assessor_association) && data.assessor_association.length > 0) {
