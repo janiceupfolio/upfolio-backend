@@ -293,22 +293,6 @@ class LearnerService {
             message: "Some qualifications are invalid",
           };
         }
-        // find all the users who has same email address exept this id
-        let user = await User.findAll({
-          where: { email: isValidUser.email, id: { [Op.ne]: isValidUser.id } }
-        })
-        if (user.length > 0) {
-          let userIds = user.map((users) => users.id)
-          let assignedQualifications = await UserQualification.findAll({
-            where: { user_id: { [Op.in]: userIds }, qualification_id: { [Op.in]: qualificationIds } }
-          })
-          if (assignedQualifications.length > 0) {
-            return {
-              status: STATUS_CODES.CONFLICT,
-              message: "Qualification already assigned"
-            }
-          }
-        }
 
         // Remove old qualifications
         await UserQualification.destroy({
