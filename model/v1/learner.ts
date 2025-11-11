@@ -293,20 +293,45 @@ class LearnerService {
             message: "Some qualifications are invalid",
           };
         }
+        // Fetch existing qualifications for the current learner
         const existingQualifications = await UserQualification.findAll({
           where: { user_id: learnerId },
           attributes: ["qualification_id"],
         });
-        const existingIds = existingQualifications.map(q => q.qualification_id);
+        const existingIds = existingQualifications.map((q) => q.qualification_id);
 
-        // Find duplicates only if new qualification not already assigned
-        const duplicateIds = qualificationIds.filter(id => existingIds.includes(id));
-        if (duplicateIds.length > 0) {
+        // Find learners with the same email in the same center (excluding this learner)
+        const sameEmailLearners = await User.findAll({
+          where: {
+            email: data.email,
+            center_id: userData.center_id,
+            deletedAt: null,
+            id: { [Op.ne]: learnerId },
+          },
+          attributes: ["id"],
+        });
+        const sameEmailLearnerIds = sameEmailLearners.map((l) => l.id);
+
+        // If other learners share this email, fetch their qualifications
+        let sameEmailQualifications: number[] = [];
+        if (sameEmailLearnerIds.length > 0) {
+          const sharedQuals = await UserQualification.findAll({
+            where: { user_id: { [Op.in]: sameEmailLearnerIds } },
+            attributes: ["qualification_id"],
+          });
+          sameEmailQualifications = sharedQuals.map((q) => q.qualification_id);
+        }
+
+        // Check if any of the qualifications being assigned already exist for same email learners
+        const conflictQualificationIds = qualificationIds.filter((id) =>
+          sameEmailQualifications.includes(id)
+        );
+
+        if (conflictQualificationIds.length > 0) {
           return {
             status: STATUS_CODES.BAD_REQUEST,
-            message: "Some qualifications already assigned",
+            message: `Qualification(s) already assigned to another learner with same email`,
           };
-
         }
         // Remove old qualifications
         await UserQualification.destroy({
