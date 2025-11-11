@@ -293,46 +293,23 @@ class LearnerService {
             message: "Some qualifications are invalid",
           };
         }
-        // Fetch existing qualifications for the current learner
-        const existingQualifications = await UserQualification.findAll({
-          where: { user_id: learnerId },
-          attributes: ["qualification_id"],
-        });
-        const existingIds = existingQualifications.map((q) => q.qualification_id);
-
-        // Find learners with the same email in the same center (excluding this learner)
-        const sameEmailLearners = await User.findAll({
-          where: {
-            email: data.email,
-            center_id: userData.center_id,
-            deletedAt: null,
-            id: { [Op.ne]: learnerId },
-          },
-          attributes: ["id"],
-        });
-        const sameEmailLearnerIds = sameEmailLearners.map((l) => l.id);
-
-        // If other learners share this email, fetch their qualifications
-        let sameEmailQualifications: number[] = [];
-        if (sameEmailLearnerIds.length > 0) {
-          const sharedQuals = await UserQualification.findAll({
-            where: { user_id: { [Op.in]: sameEmailLearnerIds } },
-            attributes: ["qualification_id"],
-          });
-          sameEmailQualifications = sharedQuals.map((q) => q.qualification_id);
+        // find all the users who has same email address exept this id
+        let user = await User.findAll({
+          where: { email: isValidUser.email, id: { [Op.ne]: isValidUser.id } }
+        })
+        if (user.length > 0) {
+          let userIds = user.map((users) => users.id)
+          let assignedQualifications = await UserQualification.findAll({
+            where: { user_id: { [Op.in]: userIds }, qualification_id: { [Op.in]: qualificationIds } }
+          })
+          if (assignedQualifications.length > 0) {
+            return {
+              status: STATUS_CODES.CONFLICT,
+              message: "Qualification already assigned"
+            }
+          }
         }
 
-        // Check if any of the qualifications being assigned already exist for same email learners
-        const conflictQualificationIds = qualificationIds.filter((id) =>
-          sameEmailQualifications.includes(id)
-        );
-
-        if (conflictQualificationIds.length > 0) {
-          return {
-            status: STATUS_CODES.BAD_REQUEST,
-            message: `Qualification(s) already assigned to another learner with same email`,
-          };
-        }
         // Remove old qualifications
         await UserQualification.destroy({
           where: { user_id: learnerId },
