@@ -34,23 +34,15 @@ class LearnerService {
         delete data.id;
       }
       // Check if email already used
-      let isEmailUsed = await User.findOne({
+      let isEmailUsedDifferentCenter = await User.findOne({
         where: {
           email: data.email,
           deletedAt: null,
-          [Op.or]: [
-            {
-              role: Roles.LEARNER,
-              center_id: userData.center_id,
-            },
-            {
-              center_id: { [Op.ne]: userData.center_id },
-            },
-          ],
+          center_id: { [Op.ne]: userData.center_id },
         },
         attributes: ["id"],
       });
-      if (isEmailUsed) {
+      if (isEmailUsedDifferentCenter) {
         return {
           status: STATUS_CODES.BAD_REQUEST,
           message: "Email already used in another center",
@@ -256,24 +248,16 @@ class LearnerService {
           message: "User not found",
         };
       }
-      // check if email already used
-      let isEmailUsed = await User.findOne({
+      // Check if email already used
+      let isEmailUsedDifferentCenter = await User.findOne({
         where: {
           email: data.email,
-          id: { [Op.ne]: learnerId },
           deletedAt: null,
-          [Op.or]: [
-            {
-              role: Roles.LEARNER,
-              center_id: userData.center_id,
-            },
-            {
-              center_id: { [Op.ne]: userData.center_id },
-            },
-          ],
+          center_id: { [Op.ne]: userData.center_id },
         },
+        attributes: ["id"],
       });
-      if (isEmailUsed) {
+      if (isEmailUsedDifferentCenter) {
         return {
           status: STATUS_CODES.BAD_REQUEST,
           message: "Email already used in another center",
@@ -309,18 +293,20 @@ class LearnerService {
             message: "Some qualifications are invalid",
           };
         }
-        // Check if qualification is already assigned to the learner
-        let isQualificationAssigned = await UserQualification.findOne({
-          where: {
-            user_id: learnerId,
-            qualification_id: { [Op.in]: qualificationIds },
-          },
+        const existingQualifications = await UserQualification.findAll({
+          where: { user_id: learnerId },
+          attributes: ["qualification_id"],
         });
-        if (isQualificationAssigned) {
+        const existingIds = existingQualifications.map(q => q.qualification_id);
+
+        // Find duplicates only if new qualification not already assigned
+        const duplicateIds = qualificationIds.filter(id => existingIds.includes(id));
+        if (duplicateIds.length > 0) {
           return {
             status: STATUS_CODES.BAD_REQUEST,
-            message: "Qualification already assigned to the learner",
+            message: "Some qualifications already assigned",
           };
+
         }
         // Remove old qualifications
         await UserQualification.destroy({
