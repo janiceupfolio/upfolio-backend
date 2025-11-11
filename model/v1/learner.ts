@@ -51,17 +51,10 @@ class LearnerService {
         attributes: ["id"],
       });
       if (isEmailUsed) {
-        if (isEmailUsed.center_id === userData.center_id) {
-          return {
-            status: STATUS_CODES.BAD_REQUEST,
-            message: "Email already used for this role in current center",
-          };
-        } else {
-          return {
-            status: STATUS_CODES.BAD_REQUEST,
-            message: "Email already used in another center",
-          };
-        }
+        return {
+          status: STATUS_CODES.BAD_REQUEST,
+          message: "Email already used in another center",
+        };
       }
       data.role = Roles.LEARNER;
       data.center_id = userData.center_id;
@@ -98,6 +91,19 @@ class LearnerService {
         return {
           status: STATUS_CODES.BAD_REQUEST,
           message: "Some qualifications are invalid",
+        };
+      }
+      // Check if qualification is already assigned to the learner
+      let isQualificationAssigned = await UserQualification.findOne({
+        where: {
+          user_id: createUser.id,
+          qualification_id: { [Op.in]: qualificationIds },
+        },
+      });
+      if (isQualificationAssigned) {
+        return {
+          status: STATUS_CODES.BAD_REQUEST,
+          message: "Qualification already assigned to the learner",
         };
       }
       await UserQualification.bulkCreate(
@@ -268,17 +274,10 @@ class LearnerService {
         },
       });
       if (isEmailUsed) {
-        if (isEmailUsed.center_id == userData.center_id) {
-          return {
-            status: STATUS_CODES.BAD_REQUEST,
-            messsage: "Email already used for this role in current center",
-          };
-        } else {
-          return {
-            status: STATUS_CODES.BAD_REQUEST,
-            message: "Email already used in another center",
-          };
-        }
+        return {
+          status: STATUS_CODES.BAD_REQUEST,
+          message: "Email already used in another center",
+        };
       }
       data.center_id = userData.center_id;
       if (data.license_year) {
@@ -310,7 +309,19 @@ class LearnerService {
             message: "Some qualifications are invalid",
           };
         }
-
+        // Check if qualification is already assigned to the learner
+        let isQualificationAssigned = await UserQualification.findOne({
+          where: {
+            user_id: learnerId,
+            qualification_id: { [Op.in]: qualificationIds },
+          },
+        });
+        if (isQualificationAssigned) {
+          return {
+            status: STATUS_CODES.BAD_REQUEST,
+            message: "Qualification already assigned to the learner",
+          };
+        }
         // Remove old qualifications
         await UserQualification.destroy({
           where: { user_id: learnerId },
