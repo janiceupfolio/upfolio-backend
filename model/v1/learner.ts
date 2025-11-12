@@ -2,7 +2,7 @@ require("dotenv").config();
 import { userAuthenticationData, UserInterface } from "../../interface/user";
 import { Roles, STATUS_CODES, STATUS_MESSAGE } from "../../configs/constants";
 import { Op, Order, Sequelize, where } from "sequelize";
-import { paginate, generateSecurePassword, centerId } from "../../helper/utils";
+import { paginate, generateSecurePassword, centerId, retryDatabaseOperation } from "../../helper/utils";
 import { emailService } from "../../helper/emailService";
 import User from "../../database/schema/user";
 import Qualifications from "../../database/schema/qualifications";
@@ -236,8 +236,8 @@ class LearnerService {
     data: UserInterface,
     userData: userAuthenticationData
   ) {
-    const transaction = await sequelize.transaction();
-    try {
+    return await retryDatabaseOperation(async () => {
+      // Perform read-only validations outside transaction to reduce lock time
       // Check is valid user
       let isValidUser = await User.findOne({
         where: { id: learnerId, deletedAt: null },
@@ -263,25 +263,38 @@ class LearnerService {
           message: "Email already used in another center",
         };
       }
-      data.center_id = userData.center_id;
-      if (data.license_year) {
-        let expiryDate = new Date();
-        expiryDate.setFullYear(expiryDate.getFullYear() + data.license_year);
-        // Format yyyy-mm-dd
-        data.license_year_expiry = expiryDate.toISOString().split("T")[0];
-      }
-      // Update user data
-      await User.update(data, {
-        where: { id: learnerId },
-        transaction,
-      });
 
+      // Validate qualifications, assessors, and IQAs outside transaction if provided
       if (data.qualifications) {
         const qualificationIds = data.qualifications
           .split(",")
           .map((id) => parseInt(id.trim()))
           .filter(Boolean);
 
+        // Find All email with same email and same center
+        let isEmailUsed = await User.findAll({
+          where: {
+            email: data.email,
+            center_id: userData.center_id,
+            deletedAt: null,
+            id: { [Op.ne]: learnerId },
+          },
+          attributes: ["id"],
+        });
+        let userIds = isEmailUsed.map((user) => user.id);
+        // Find all the users assigned qualifications to the userIds
+        let userQualifications = await UserQualification.findAll({
+          where: {
+            user_id: { [Op.in]: userIds },
+            qualification_id: { [Op.in]: qualificationIds },
+          },
+        });
+        if (userQualifications.length > 0) {
+          return {
+            status: STATUS_CODES.BAD_REQUEST,
+            message: "Qualification already assigned to the learner",
+          };
+        }
         // Validate qualification IDs
         const validQualifications = await Qualifications.findAll({
           where: { id: qualificationIds },
@@ -293,72 +306,8 @@ class LearnerService {
             message: "Some qualifications are invalid",
           };
         }
-
-        // Remove old qualifications
-        await UserQualification.destroy({
-          where: { user_id: learnerId },
-          force: true,
-          transaction,
-        });
-
-        // Insert updated qualifications
-        await UserQualification.bulkCreate(
-          qualificationIds.map((qid) => ({
-            user_id: +learnerId,
-            qualification_id: qid,
-          })),
-          { transaction }
-        );
-
-        // Delete old units
-        await UserUnits.destroy({
-          where: { user_id: learnerId },
-          force: true,
-          transaction,
-        });
-        // Find All units which are assigned to qualification
-        const units_ = await Units.findAll({
-          where: {
-            qualification_id: { [Op.in]: qualificationIds },
-          },
-        });
-        const categoryIds = units_.map((unit) => unit.category_id);
-        const validCategories = await Category.findAll({
-          where: { id: { [Op.in]: categoryIds } },
-          attributes: ["id", "is_mandatory"],
-        });
-        const categoryMap: Record<number, boolean> = validCategories.reduce(
-          (acc, category) => {
-            acc[category.id] = category.is_mandatory;
-            return acc;
-          }, {}
-        );
-        // Update units
-        await UserUnits.bulkCreate(
-          units_.map((unit) => ({
-            user_id: +learnerId,
-            unit_id: unit.id,
-            is_assigned: !!categoryMap[unit.category_id] || false,
-          })),
-          { transaction }
-        );
-        // Update optional qualifications
-        const optionalQualificationIds = qualificationIds.filter((qid) => {
-          const qUnits = units_.filter((u) => u.qualification_id === qid);
-          return (
-            qUnits.length > 0 &&
-            qUnits.every((unit) => !!categoryMap[unit.category_id])
-          );
-        });
-        if (optionalQualificationIds.length > 0) {
-          await UserQualification.update(
-            { is_optional_assigned: true },
-            { where: { user_id: learnerId, qualification_id: { [Op.in]: optionalQualificationIds } }, transaction }
-          );
-        }
       }
 
-      // Update Assessor associations if provided
       if (data.assessors) {
         const assessorIds = data.assessors
           .split(",")
@@ -378,23 +327,8 @@ class LearnerService {
             message: "Some assessors are invalid",
           };
         }
-        // Remove old assessor associations
-        await UserAssessor.destroy({
-          where: { user_id: learnerId },
-          force: true,
-          transaction,
-        });
-        // Insert updated assessor associations
-        await UserAssessor.bulkCreate(
-          assessorIds.map((assessorId) => ({
-            user_id: +learnerId,
-            assessor_id: assessorId,
-          })),
-          { transaction }
-        );
       }
 
-      // Update IQA associations if provided
       if (data.iqas) {
         const iqaIds = data.iqas
           .split(",")
@@ -414,48 +348,171 @@ class LearnerService {
             message: "Some IQAs are invalid",
           };
         }
-        // Remove old IQA associations
-        await UserIQA.destroy({
-          where: { user_id: learnerId },
-          force: true,
+      }
+
+      // Now start transaction for write operations
+      const transaction = await sequelize.transaction();
+      try {
+        data.center_id = userData.center_id;
+        if (data.license_year) {
+          let expiryDate = new Date();
+          expiryDate.setFullYear(expiryDate.getFullYear() + data.license_year);
+          // Format yyyy-mm-dd
+          data.license_year_expiry = expiryDate.toISOString().split("T")[0];
+        }
+        // Update user data
+        await User.update(data, {
+          where: { id: learnerId },
           transaction,
         });
-        // Insert updated IQA associations
-        await UserIQA.bulkCreate(
-          iqaIds.map((iqaId) => ({
-            user_id: +learnerId,
-            iqa_id: iqaId,
-          })),
-          { transaction }
-        );
+
+        if (data.qualifications) {
+          const qualificationIds = data.qualifications
+            .split(",")
+            .map((id) => parseInt(id.trim()))
+            .filter(Boolean);
+
+          // Remove old qualifications
+          await UserQualification.destroy({
+            where: { user_id: learnerId },
+            force: true,
+            transaction,
+          });
+
+          // Insert updated qualifications
+          await UserQualification.bulkCreate(
+            qualificationIds.map((qid) => ({
+              user_id: +learnerId,
+              qualification_id: qid,
+            })),
+            { transaction }
+          );
+
+          // Delete old units
+          await UserUnits.destroy({
+            where: { user_id: learnerId },
+            force: true,
+            transaction,
+          });
+          // Find All units which are assigned to qualification
+          const units_ = await Units.findAll({
+            where: {
+              qualification_id: { [Op.in]: qualificationIds },
+            },
+            transaction,
+          });
+          const categoryIds = units_.map((unit) => unit.category_id);
+          const validCategories = await Category.findAll({
+            where: { id: { [Op.in]: categoryIds } },
+            attributes: ["id", "is_mandatory"],
+            transaction,
+          });
+          const categoryMap: Record<number, boolean> = validCategories.reduce(
+            (acc, category) => {
+              acc[category.id] = category.is_mandatory;
+              return acc;
+            },
+            {}
+          );
+          // Update units
+          await UserUnits.bulkCreate(
+            units_.map((unit) => ({
+              user_id: +learnerId,
+              unit_id: unit.id,
+              is_assigned: !!categoryMap[unit.category_id] || false,
+            })),
+            { transaction }
+          );
+          // Update optional qualifications
+          const optionalQualificationIds = qualificationIds.filter((qid) => {
+            const qUnits = units_.filter((u) => u.qualification_id === qid);
+            return (
+              qUnits.length > 0 &&
+              qUnits.every((unit) => !!categoryMap[unit.category_id])
+            );
+          });
+          if (optionalQualificationIds.length > 0) {
+            await UserQualification.update(
+              { is_optional_assigned: true },
+              {
+                where: {
+                  user_id: learnerId,
+                  qualification_id: { [Op.in]: optionalQualificationIds },
+                },
+                transaction,
+              }
+            );
+          }
+        }
+
+        // Update Assessor associations if provided
+        if (data.assessors) {
+          const assessorIds = data.assessors
+            .split(",")
+            .map((id) => parseInt(id.trim()))
+            .filter(Boolean);
+          // Remove old assessor associations
+          await UserAssessor.destroy({
+            where: { user_id: learnerId },
+            force: true,
+            transaction,
+          });
+          // Insert updated assessor associations
+          await UserAssessor.bulkCreate(
+            assessorIds.map((assessorId) => ({
+              user_id: +learnerId,
+              assessor_id: assessorId,
+            })),
+            { transaction }
+          );
+        }
+
+        // Update IQA associations if provided
+        if (data.iqas) {
+          const iqaIds = data.iqas
+            .split(",")
+            .map((id) => parseInt(id.trim()))
+            .filter(Boolean);
+          // Remove old IQA associations
+          await UserIQA.destroy({
+            where: { user_id: learnerId },
+            force: true,
+            transaction,
+          });
+          // Insert updated IQA associations
+          await UserIQA.bulkCreate(
+            iqaIds.map((iqaId) => ({
+              user_id: +learnerId,
+              iqa_id: iqaId,
+            })),
+            { transaction }
+          );
+        }
+        if (data.email && isValidUser.email !== data.email) {
+          let password = await generateSecurePassword();
+          await User.update(
+            { password: password },
+            { where: { id: isValidUser.id }, transaction }
+          );
+          // Send Email to Learner
+          await emailService.sendLearnerAccountEmail(
+            data.name,
+            data.email,
+            password
+          );
+        }
+        await transaction.commit();
+        return {
+          data: {},
+          status: STATUS_CODES.SUCCESS,
+          message: "Learner Updated Successfully",
+        };
+      } catch (error) {
+        console.log(error);
+        await transaction.rollback();
+        throw error; // Re-throw to allow retry mechanism to handle it
       }
-      if (data.email && isValidUser.email !== data.email) {
-        let password = await generateSecurePassword();
-        await User.update(
-          { password: password },
-          { where: { id: isValidUser.id }, transaction }
-        );
-        // Send Email to Learner
-        await emailService.sendLearnerAccountEmail(
-          data.name,
-          data.email,
-          password
-        );
-      }
-      await transaction.commit();
-      return {
-        data: {},
-        status: STATUS_CODES.SUCCESS,
-        message: "Learner Updated Successfully",
-      };
-    } catch (error) {
-      console.log(error);
-      await transaction.rollback();
-      return {
-        status: STATUS_CODES.SERVER_ERROR,
-        message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
-      };
-    }
+    });
   }
 
   // List Learner
@@ -654,10 +711,10 @@ class LearnerService {
         pagination: pagination,
         center_data: center_data
           ? {
-            id: center_data.id,
-            center_name: center_data.center_name,
-            center_address: center_data.center_address,
-          }
+              id: center_data.id,
+              center_name: center_data.center_name,
+              center_address: center_data.center_address,
+            }
           : {},
       };
       return {
@@ -805,37 +862,54 @@ class LearnerService {
         };
       }
       // Unit ids came in comma separated string and some time it come "" or null as well
-      let unitIds = data.unit_ids.split(",").map((id) => id.trim()).filter((id) => id !== "" && !isNaN(id)).map((id) => parseInt(id));
+      let unitIds = data.unit_ids
+        .split(",")
+        .map((id) => id.trim())
+        .filter((id) => id !== "" && !isNaN(id))
+        .map((id) => parseInt(id));
       if (unitIds.length > 0) {
         await UserUnits.update(
           { is_assigned: true },
           { where: { user_id: learnerId, unit_id: { [Op.in]: unitIds } } }
         );
       }
-      let qualificationIds = data.qualification_ids.split(",").map((id) => id.trim()).filter((id) => id !== "" && !isNaN(id)).map((id) => parseInt(id));
+      let qualificationIds = data.qualification_ids
+        .split(",")
+        .map((id) => id.trim())
+        .filter((id) => id !== "" && !isNaN(id))
+        .map((id) => parseInt(id));
       if (qualificationIds.length > 0) {
         await UserQualification.update(
           { is_optional_assigned: data.is_optional_assigned },
-          { where: { user_id: learnerId, qualification_id: { [Op.in]: qualificationIds } } }
+          {
+            where: {
+              user_id: learnerId,
+              qualification_id: { [Op.in]: qualificationIds },
+            },
+          }
         );
       }
-      // is_not_assign_unit handle 
-      let notAssignUnit = data.is_not_assign_unit.split(",").map((id) => id.trim()).filter((id) => id !== "" && !isNaN(id)).map((id) => parseInt(id));
+      // is_not_assign_unit handle
+      let notAssignUnit = data.is_not_assign_unit
+        .split(",")
+        .map((id) => id.trim())
+        .filter((id) => id !== "" && !isNaN(id))
+        .map((id) => parseInt(id));
       if (notAssignUnit.length > 0) {
         await UserUnits.update(
           { is_assigned: false },
           { where: { user_id: learnerId, unit_id: { [Op.in]: notAssignUnit } } }
-        )
+        );
       }
       let response = await qualificationService.getCategoryByQualification(
         { categorywise_unit_data: 1 },
         qualificationIds[0],
         userData,
         learnerId
-      )
-      let response_ = {}
+      );
+      let response_ = {};
       if (response.data && response.status == 200) {
-        response_ = response.data
+        response_ = response.data;
       }
       return {
         status: STATUS_CODES.SUCCESS,
