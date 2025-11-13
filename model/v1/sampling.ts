@@ -3,6 +3,7 @@ import Sampling from "../../database/schema/sampling";
 import {
   Entity,
   EntityType,
+  RoleSlug,
   STATUS_CODES,
   STATUS_MESSAGE,
 } from "../../configs/constants";
@@ -19,6 +20,7 @@ import User from "../../database/schema/user";
 import AssessmentUnits from "../../database/schema/assessment_units";
 import Qualifications from "../../database/schema/qualifications";
 import UserUnits from "../../database/schema/user_units";
+import Role from "../../database/schema/role";
 const { sequelize } = require("../../configs/database");
 
 class SamplingService {
@@ -58,6 +60,8 @@ class SamplingService {
       data.center_id = userData.center_id
       let createSampling = await Sampling.create(data, { transaction });
       // Create Sampling Units
+      let iqaRoleId = await Role.findOne({ where: { role_slug: RoleSlug.IQA } })
+      let isIQA = await User.findOne({ where: { id: userData.id, role: iqaRoleId.id } })
       if (data.unit_ids) {
         const unitIds = data.unit_ids
           .toString()
@@ -70,7 +74,7 @@ class SamplingService {
             { sampling_id: createSampling.id, unit_id: unitId },
             { transaction }
           );
-          await UserUnits.update({ is_sampling: true, reference_type: 1 }, { where: { unit_id: unitId } })
+          await UserUnits.update({ is_sampling: true, reference_type: 1, iqa_id: isIQA.id }, { where: { unit_id: unitId } })
         }
       }
       // Create Sampling Assessments
@@ -81,7 +85,7 @@ class SamplingService {
           .map(id => id.trim())
           .filter(id => id); // remove empty strings
         
-        await Assessment.update({ is_sampling: true }, { where: { id: { [Op.in]: assessmentIds } } })
+        await Assessment.update({ is_sampling: true, iqa_id: isIQA.id }, { where: { id: { [Op.in]: assessmentIds } } })
         // Find All Unit which assigned to assessment
         let assessment_ = await AssessmentUnits.findAll({
           where: { assessment_id: { [Op.in]: assessmentIds } }

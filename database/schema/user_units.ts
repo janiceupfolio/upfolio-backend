@@ -12,6 +12,7 @@ class UserUnits extends Model<UserUnitsInterface> implements UserUnitsInterface 
   public is_sampling: boolean;
   public reference_type: number;
   public is_assigned: boolean;
+  public iqa_id?: number;
   public status: number;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -48,6 +49,10 @@ UserUnits.init(
       type: DataTypes.INTEGER,
       allowNull: true,
     },
+    iqa_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    }
   },
   {
     ...BaseModel.initBaseOptions(sequelize),

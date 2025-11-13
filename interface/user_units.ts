@@ -6,6 +6,7 @@ export interface UserUnitsInterface {
   reference_type: number;
   is_assigned: boolean;
   status: number;
+  iqa_id?: number;
   createdAt?: Date;
   updatedAt?: Date;
   deletedAt?: Date;
