@@ -86,13 +86,18 @@ class LearnerService {
         };
       }
       // Check if qualification is already assigned to the learner
-      let isQualificationAssigned = await UserQualification.findOne({
+      let sameEmailLearner = await User.findAll({
+        where: { email: data.email, deletedAt: null, center_id: userData.center_id },
+        attributes: ["id"]
+      })
+      let learnerIds = sameEmailLearner.map((learner) => learner.id);
+      let isQualificationAssigned = await UserQualification.findAll({
         where: {
-          user_id: createUser.id,
+          user_id: { [Op.in]: learnerIds },
           qualification_id: { [Op.in]: qualificationIds },
         },
       });
-      if (isQualificationAssigned) {
+      if (isQualificationAssigned.length > 0) {
         return {
           status: STATUS_CODES.BAD_REQUEST,
           message: "Qualification already assigned to the learner",
