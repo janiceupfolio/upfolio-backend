@@ -354,7 +354,7 @@ class IQAService {
       return {
         status: STATUS_CODES.SUCCESS,
         data: response,
-        message: "Learner List fetched successfully",
+        message: "IQA List fetched successfully",
       };
     } catch (error) {
       console.log(error);
