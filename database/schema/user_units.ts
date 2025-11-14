@@ -4,6 +4,7 @@ const { sequelize } = require("../../configs/database");
 import BaseModel from "./base";
 import { TABLE_NAME } from "../../configs/tables";
 import { UserUnitsInterface } from "../../interface/user_units";
+import User from "./user";
 
 class UserUnits extends Model<UserUnitsInterface> implements UserUnitsInterface {
   public id!: number;
@@ -14,6 +15,7 @@ class UserUnits extends Model<UserUnitsInterface> implements UserUnitsInterface 
   public is_assigned: boolean;
   public iqa_id?: number;
   public status: number;
+  public sampled_at?: string;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
   public deletedAt?: Date;
@@ -52,12 +54,21 @@ UserUnits.init(
     iqa_id: {
       type: DataTypes.INTEGER,
       allowNull: true,
-    }
+    },
+    sampled_at: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   },
   {
     ...BaseModel.initBaseOptions(sequelize),
     tableName: TABLE_NAME.USER_UNITS,
   }
 );
+
+UserUnits.belongsTo(User, {
+  foreignKey: "iqa_id",
+  as: "iqa",
+});
 
 export default UserUnits;

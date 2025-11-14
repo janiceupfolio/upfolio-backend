@@ -7,6 +7,7 @@ export interface UserUnitsInterface {
   is_assigned: boolean;
   status: number;
   iqa_id?: number;
+  sampled_at?: string;
   createdAt?: Date;
   updatedAt?: Date;
   deletedAt?: Date;

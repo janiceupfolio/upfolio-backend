@@ -9,7 +9,12 @@ import {
 } from "../../configs/constants";
 import { extname } from "path";
 import { v4 as uuidv4 } from "uuid";
-import { centerId, deleteFileOnAWS, paginate, uploadFileOnAWS } from "../../helper/utils";
+import {
+  centerId,
+  deleteFileOnAWS,
+  paginate,
+  uploadFileOnAWS,
+} from "../../helper/utils";
 import Image from "../../database/schema/images";
 import SamplingUnits from "../../database/schema/sampling_units";
 import SamplingAssessments from "../../database/schema/sampling_assessments";
@@ -36,11 +41,11 @@ class SamplingService {
       mimeType === "application/pdf" ||
       mimeType === "application/msword" ||
       mimeType ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
       mimeType ===
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
       mimeType ===
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     ) {
       return EntityType.DOCUMENT;
     }
@@ -55,43 +60,70 @@ class SamplingService {
   ): Promise<any> {
     const transaction = await sequelize.transaction();
     try {
-      data.reference_type = data.unit_ids ? 1 : data.assessment_ids ? 2 : null
-      data.created_by = userData.id
-      data.center_id = userData.center_id
+      data.reference_type = data.unit_ids ? 1 : data.assessment_ids ? 2 : null;
+      data.created_by = userData.id;
+      data.center_id = userData.center_id;
       let createSampling = await Sampling.create(data, { transaction });
       // Create Sampling Units
-      let iqaRoleId = await Role.findOne({ where: { role_slug: RoleSlug.IQA } })
-      let isIQA = await User.findOne({ where: { id: userData.id, role: iqaRoleId.id } })
+      let iqaRoleId = await Role.findOne({
+        where: { role_slug: RoleSlug.IQA },
+      });
+      let isIQA = await User.findOne({
+        where: { id: userData.id, role: iqaRoleId.id },
+      });
       if (data.unit_ids) {
         const unitIds = data.unit_ids
           .toString()
-          .split(',')
-          .map(id => id.trim())
-          .filter(id => id); // remove empty strings
+          .split(",")
+          .map((id) => id.trim())
+          .filter((id) => id); // remove empty strings
 
         for (const unitId of unitIds) {
           await SamplingUnits.create(
             { sampling_id: createSampling.id, unit_id: unitId },
             { transaction }
           );
-          await UserUnits.update({ is_sampling: true, reference_type: 1, iqa_id: isIQA.id }, { where: { unit_id: unitId } })
+          await UserUnits.update(
+            {
+              is_sampling: true,
+              reference_type: 1,
+              iqa_id: isIQA.id,
+              sampled_at: new Date().toISOString(),
+            },
+            { where: { unit_id: unitId } }
+          );
         }
       }
       // Create Sampling Assessments
       if (data.assessment_ids) {
         const assessmentIds = data.assessment_ids
           .toString()
-          .split(',')
-          .map(id => id.trim())
-          .filter(id => id); // remove empty strings
-        
-        await Assessment.update({ is_sampling: true, iqa_id: isIQA.id }, { where: { id: { [Op.in]: assessmentIds } } })
+          .split(",")
+          .map((id) => id.trim())
+          .filter((id) => id); // remove empty strings
+
+        await Assessment.update(
+          {
+            is_sampling: true,
+            iqa_id: isIQA.id,
+            sampled_at: new Date().toISOString(),
+          },
+          { where: { id: { [Op.in]: assessmentIds } } }
+        );
         // Find All Unit which assigned to assessment
         let assessment_ = await AssessmentUnits.findAll({
-          where: { assessment_id: { [Op.in]: assessmentIds } }
-        })
-        let unitIds = assessment_.map(data => data.unit_id)
-        await UserUnits.update({ is_sampling: true, reference_type: 2 }, { where: { unit_id: { [Op.in]: unitIds } } })
+          where: { assessment_id: { [Op.in]: assessmentIds } },
+        });
+        let unitIds = assessment_.map((data) => data.unit_id);
+        await UserUnits.update(
+          {
+            is_sampling: true,
+            reference_type: 2,
+            iqa_id: isIQA.id,
+            sampled_at: new Date().toISOString(),
+          },
+          { where: { unit_id: { [Op.in]: unitIds } } }
+        );
         for (const assessmentId of assessmentIds) {
           await SamplingAssessments.create(
             { sampling_id: createSampling.id, assessment_id: assessmentId },
@@ -160,7 +192,7 @@ class SamplingService {
         transaction,
       });
       if (data.unit_ids && data.unit_ids.length > 0) {
-        data.reference_type = 1
+        data.reference_type = 1;
         for (const unitId of data.unit_ids) {
           await SamplingUnits.create(
             { sampling_id: data.id, unit_id: unitId },
@@ -175,7 +207,7 @@ class SamplingService {
         transaction,
       });
       if (data.assessment_ids && data.assessment_ids.length > 0) {
-        data.reference_type = 2
+        data.reference_type = 2;
         for (const assessmentId of data.assessment_ids) {
           await SamplingAssessments.create(
             { sampling_id: data.id, assessment_id: assessmentId },
@@ -266,7 +298,11 @@ class SamplingService {
     const transaction = await sequelize.transaction();
     try {
       await Sampling.destroy({ where: { id }, force: true, transaction });
-      await SamplingUnits.destroy({ where: { sampling_id: id }, force: true, transaction });
+      await SamplingUnits.destroy({
+        where: { sampling_id: id },
+        force: true,
+        transaction,
+      });
       await SamplingAssessments.destroy({
         where: { sampling_id: id },
         force: true,
@@ -302,17 +338,17 @@ class SamplingService {
           {
             model: User,
             as: "assessor",
-            attributes: ["id", "name", "surname"]
+            attributes: ["id", "name", "surname"],
           },
           {
             model: Qualifications,
             as: "qualification",
-            attributes: ["id", "name", "qualification_no"]
+            attributes: ["id", "name", "qualification_no"],
           },
           {
             model: User,
             as: "learner",
-            attributes: ["id", "name", "surname"]
+            attributes: ["id", "name", "surname"],
           },
           {
             model: Units,
@@ -352,7 +388,10 @@ class SamplingService {
   }
 
   // List Sampling
-  static async listSampling(data: any, userData: userAuthenticationData): Promise<any> {
+  static async listSampling(
+    data: any,
+    userData: userAuthenticationData
+  ): Promise<any> {
     try {
       const limit = data?.limit ? +data.limit : 0;
       const page = data?.page ? +data.page : 0;
@@ -373,7 +412,7 @@ class SamplingService {
           {
             model: User,
             as: "learner",
-            attributes: ["id", "name", "surname"]
+            attributes: ["id", "name", "surname"],
           },
           // {
           //   model: Units,
