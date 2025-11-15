@@ -192,33 +192,33 @@ class LearnerService {
         );
       }
       // Associate Learner with IQA if provided
-      if (data.iqas) {
-        const iqaIds = data.iqas
-          .split(",")
-          .map((id) => parseInt(id.trim()))
-          .filter(Boolean);
-        // Validate IQA IDs exist
-        const validIQAs = await User.findAll({
-          where: {
-            id: { [Op.in]: iqaIds },
-            role: Roles.IQA,
-            deletedAt: null,
-          },
-        });
-        if (validIQAs.length !== iqaIds.length) {
-          return {
-            status: STATUS_CODES.BAD_REQUEST,
-            message: "Some IQAs are invalid",
-          };
-        }
-        await UserIQA.bulkCreate(
-          iqaIds.map((iqaId) => ({
-            user_id: createUser.id,
-            iqa_id: iqaId,
-          })),
-          { transaction }
-        );
-      }
+      // if (data.iqas) {
+      //   const iqaIds = data.iqas
+      //     .split(",")
+      //     .map((id) => parseInt(id.trim()))
+      //     .filter(Boolean);
+      //   // Validate IQA IDs exist
+      //   const validIQAs = await User.findAll({
+      //     where: {
+      //       id: { [Op.in]: iqaIds },
+      //       role: Roles.IQA,
+      //       deletedAt: null,
+      //     },
+      //   });
+      //   if (validIQAs.length !== iqaIds.length) {
+      //     return {
+      //       status: STATUS_CODES.BAD_REQUEST,
+      //       message: "Some IQAs are invalid",
+      //     };
+      //   }
+      //   await UserIQA.bulkCreate(
+      //     iqaIds.map((iqaId) => ({
+      //       user_id: createUser.id,
+      //       iqa_id: iqaId,
+      //     })),
+      //     { transaction }
+      //   );
+      // }
       await transaction.commit();
       return {
         data: createUser,
@@ -334,26 +334,26 @@ class LearnerService {
         }
       }
 
-      if (data.iqas) {
-        const iqaIds = data.iqas
-          .split(",")
-          .map((id) => parseInt(id.trim()))
-          .filter(Boolean);
-        // Validate IQA IDs exist
-        const validIQAs = await User.findAll({
-          where: {
-            id: { [Op.in]: iqaIds },
-            role: Roles.IQA,
-            deletedAt: null,
-          },
-        });
-        if (validIQAs.length !== iqaIds.length) {
-          return {
-            status: STATUS_CODES.BAD_REQUEST,
-            message: "Some IQAs are invalid",
-          };
-        }
-      }
+      // if (data.iqas) {
+      //   const iqaIds = data.iqas
+      //     .split(",")
+      //     .map((id) => parseInt(id.trim()))
+      //     .filter(Boolean);
+      //   // Validate IQA IDs exist
+      //   const validIQAs = await User.findAll({
+      //     where: {
+      //       id: { [Op.in]: iqaIds },
+      //       role: Roles.IQA,
+      //       deletedAt: null,
+      //     },
+      //   });
+      //   if (validIQAs.length !== iqaIds.length) {
+      //     return {
+      //       status: STATUS_CODES.BAD_REQUEST,
+      //       message: "Some IQAs are invalid",
+      //     };
+      //   }
+      // }
 
       // Now start transaction for write operations
       const transaction = await sequelize.transaction();
@@ -473,26 +473,26 @@ class LearnerService {
         }
 
         // Update IQA associations if provided
-        if (data.iqas) {
-          const iqaIds = data.iqas
-            .split(",")
-            .map((id) => parseInt(id.trim()))
-            .filter(Boolean);
-          // Remove old IQA associations
-          await UserIQA.destroy({
-            where: { user_id: learnerId },
-            force: true,
-            transaction,
-          });
-          // Insert updated IQA associations
-          await UserIQA.bulkCreate(
-            iqaIds.map((iqaId) => ({
-              user_id: +learnerId,
-              iqa_id: iqaId,
-            })),
-            { transaction }
-          );
-        }
+        // if (data.iqas) {
+        //   const iqaIds = data.iqas
+        //     .split(",")
+        //     .map((id) => parseInt(id.trim()))
+        //     .filter(Boolean);
+        //   // Remove old IQA associations
+        //   await UserIQA.destroy({
+        //     where: { user_id: learnerId },
+        //     force: true,
+        //     transaction,
+        //   });
+        //   // Insert updated IQA associations
+        //   await UserIQA.bulkCreate(
+        //     iqaIds.map((iqaId) => ({
+        //       user_id: +learnerId,
+        //       iqa_id: iqaId,
+        //     })),
+        //     { transaction }
+        //   );
+        // }
         if (data.email && isValidUser.email !== data.email) {
           let password = await generateSecurePassword();
           await User.update(
@@ -521,6 +521,7 @@ class LearnerService {
   }
 
   // List Learner
+  // List Learner
   static async listLearner(data, userData: userAuthenticationData) {
     try {
       const limit = data?.limit ? +data.limit : 0;
@@ -531,29 +532,22 @@ class LearnerService {
       let order: Order = [[sort_by, sort_order]];
       const fetchAll = limit === 0 || page === 0;
 
-      // Where condition
       let whereCondition: any = {
         deletedAt: null,
         role: Roles.LEARNER,
       };
 
-      // Filter by center_id if provided
-      let center_id = data?.center_id
-        ? data.center_id
-        : await centerId(userData);
+      let center_id = data?.center_id ? data.center_id : await centerId(userData);
       let center_data;
       if (center_id) {
         whereCondition.center_id = center_id;
         center_data = await Center.findById(center_id);
       }
 
-      // Qualification Ids where condition
-      let whereConditionQualification: any = {
-        deletedAt: null,
-      };
+      let whereConditionQualification: any = { deletedAt: null };
       let qualificationRequired = false;
+
       if (data.qualification_id) {
-        // Convert comma-separated IDs into an array of numbers
         const qualificationIds = data.qualification_id
           .split(",")
           .map((id) => Number(id.trim()))
@@ -565,34 +559,20 @@ class LearnerService {
         }
       }
 
-      // Where include condition
-      let whereConditionInclude: any = {
-        deletedAt: null,
-      };
-      // let includeRequired = false;
+      let whereConditionInclude: any = { deletedAt: null };
       let includeRequiredAssessor = false;
-      let includeRequiredIqa = false;
 
-      // Qualification Management
       if (data?.user_id) {
         whereConditionQualification.user_id = data.user_id;
         qualificationRequired = true;
         whereConditionInclude.id = data.user_id;
         includeRequiredAssessor = true;
-        includeRequiredIqa = true;
-      }
-
-      if (data.iqa_id) {
-        whereConditionInclude.id = data.iqa_id;
-        includeRequiredIqa = true;
       }
 
       let search = data?.search || "";
       let searchOptions = {};
       if (search) {
-        // Remove any non-digit characters from search for phone number matching
         let cleanSearch = search.replace(/\D/g, "");
-
         searchOptions = {
           [Op.or]: [
             { name: { [Op.like]: `%${search}%` } },
@@ -603,37 +583,22 @@ class LearnerService {
               `CONCAT(User.name, ' ', User.surname) LIKE '%${search}%'`
             ),
             Sequelize.literal(
-              `CONCAT(User.phone_code, ' ', User.phone_number) LIKE '%${search}%'`
-            ),
-            // // Search for phone number without country code
-            // Sequelize.literal(`User.phone_number LIKE '%${cleanSearch}%'`),
-            // Search for concatenated phone code and number without space
-            Sequelize.literal(
               `CONCAT(User.phone_code, User.phone_number) LIKE '%${search}%'`
             ),
-            // // Search for concatenated phone code and number with space
-            // Sequelize.literal(`CONCAT(User.phone_code, ' ', User.phone_number) LIKE '%${search}%'`),
-            // // Search for phone number with country code (digits only)
-            // Sequelize.literal(`CONCAT(REPLACE(User.phone_code, '+', ''), User.phone_number) LIKE '%${cleanSearch}%'`),
           ],
         };
       }
 
-      // Check if logged in user is assessor then only assigned learner will show
       let isAssessor = await User.findOne({
         where: { id: userData.id, role: Roles.ASSESSOR, deletedAt: null },
       });
 
-      // through where condition
       let throughWhere: any = {};
-      if (data.is_signed_off) {
-        throughWhere.is_signed_off = data.is_signed_off;
-      }
-      if (data.is_optional_assigned) {
+      if (data.is_signed_off) throughWhere.is_signed_off = data.is_signed_off;
+      if (data.is_optional_assigned)
         throughWhere.is_optional_assigned = data.is_optional_assigned;
-      }
 
-      let include = [
+      let include: any = [
         {
           model: Qualifications,
           as: "qualifications",
@@ -642,14 +607,7 @@ class LearnerService {
           through: {
             attributes: ["is_signed_off", "is_optional_assigned"],
             where: throughWhere,
-          }, // prevent including join table info
-        },
-        {
-          model: User,
-          as: "iqas",
-          through: { attributes: [] },
-          where: whereConditionInclude,
-          required: includeRequiredIqa,
+          },
         },
         {
           model: Center,
@@ -659,13 +617,10 @@ class LearnerService {
       ];
 
       if (isAssessor) {
-        // Use the correct column name (user_id) instead of learner_id
         whereCondition.id = {
           [Op.in]: Sequelize.literal(`(
-            SELECT user_id
-            FROM tbl_user_assessor
-            WHERE assessor_id = ${userData.id}
-          )`),
+          SELECT user_id FROM tbl_user_assessor WHERE assessor_id = ${userData.id}
+        )`),
         };
       } else {
         include.push({
@@ -676,52 +631,61 @@ class LearnerService {
           required: includeRequiredAssessor,
         });
       }
+
       let userData_ = await User.findAndCountAll({
-        where: {
-          ...searchOptions,
-          ...whereCondition,
-        },
+        where: { ...searchOptions, ...whereCondition },
         include: include,
         limit: fetchAll ? undefined : limit,
         offset: fetchAll ? undefined : offset,
         order,
         distinct: true,
       });
+
       userData_ = JSON.parse(JSON.stringify(userData_));
-      // Flatten qualifications with Promise.all
+
+      // ✅ Flatten qualifications & assessor (convert array -> object)
       if (userData_ && userData_.rows?.length) {
         userData_.rows = await Promise.all(
           userData_.rows.map(async (user: any) => {
+            // Convert qualifications array → object
             if (user.qualifications?.length) {
-              user.qualifications = await Promise.all(
-                user.qualifications.map(async (q: any) => {
-                  const { tbl_user_qualification, ...rest } = q; // remove join object
-                  return {
-                    ...rest,
-                    is_signed_off:
-                      tbl_user_qualification?.is_signed_off ?? null,
-                    is_optional_assigned:
-                      tbl_user_qualification?.is_optional_assigned ?? null,
-                  };
-                })
-              );
+              const q = user.qualifications[0]; // take first object
+              const { tbl_user_qualification, ...rest } = q;
+              user.qualifications = {
+                ...rest,
+                is_signed_off: tbl_user_qualification?.is_signed_off ?? null,
+                is_optional_assigned:
+                  tbl_user_qualification?.is_optional_assigned ?? null,
+              };
+            } else {
+              user.qualifications = {};
             }
+
+            // Convert assessors array → object
+            if (user.assessors?.length) {
+              user.assessors = user.assessors[0];
+            } else {
+              user.assessors = {};
+            }
+
             return user;
           })
         );
       }
+
       const pagination = await paginate(userData_, limit, page, fetchAll);
       const response = {
         data: userData_.rows,
-        pagination: pagination,
+        pagination,
         center_data: center_data
           ? {
-              id: center_data.id,
-              center_name: center_data.center_name,
-              center_address: center_data.center_address,
-            }
+            id: center_data.id,
+            center_name: center_data.center_name,
+            center_address: center_data.center_address,
+          }
           : {},
       };
+
       return {
         status: STATUS_CODES.SUCCESS,
         data: response,
@@ -736,6 +700,8 @@ class LearnerService {
     }
   }
 
+
+  // Detail Learner
   // Detail Learner
   static async detailLearner(
     learnerId: number | string,
@@ -743,14 +709,14 @@ class LearnerService {
   ) {
     try {
       // Check if learner exists
-      let isValidUser = await User.findOne({
+      let isValidUser: any = await User.findOne({
         where: { id: learnerId, deletedAt: null, role: Roles.LEARNER },
         include: [
           {
             model: Qualifications,
             as: "qualifications",
             required: false,
-            through: { attributes: ["is_signed_off", "is_optional_assigned"] }, // prevent including join table info
+            through: { attributes: ["is_signed_off", "is_optional_assigned"] },
           },
           {
             model: User,
@@ -772,28 +738,49 @@ class LearnerService {
           },
         ],
       });
+
       isValidUser = JSON.parse(JSON.stringify(isValidUser));
-      //@ts-ignore
-      if (isValidUser && isValidUser.qualifications?.length) {
-        //@ts-ignore
-        isValidUser.qualifications = await Promise.all(
-          //@ts-ignore
-          isValidUser.qualifications.map(async (q: any) => {
-            const { tbl_user_qualification, UserQualification, ...rest } = q; // strip join table objects
-            return {
-              ...rest,
-              is_signed_off:
-                tbl_user_qualification?.is_signed_off ??
-                UserQualification?.is_signed_off ??
-                null,
-              is_optional_assigned:
-                tbl_user_qualification?.is_optional_assigned ??
-                UserQualification?.is_optional_assigned ??
-                null,
-            };
-          })
-        );
+
+      if (!isValidUser) {
+        return {
+          status: STATUS_CODES.NOT_FOUND,
+          message: "Learner not found",
+        };
       }
+
+      // ✅ Convert qualifications array → object
+      if (isValidUser.qualifications?.length) {
+        const q = isValidUser.qualifications[0];
+        const { tbl_user_qualification, UserQualification, ...rest } = q;
+        isValidUser.qualifications = {
+          ...rest,
+          is_signed_off:
+            tbl_user_qualification?.is_signed_off ??
+            UserQualification?.is_signed_off ??
+            null,
+          is_optional_assigned:
+            tbl_user_qualification?.is_optional_assigned ??
+            UserQualification?.is_optional_assigned ??
+            null,
+        };
+      } else {
+        isValidUser.qualifications = {};
+      }
+
+      // ✅ Convert assessors array → object
+      if (isValidUser.assessors?.length) {
+        isValidUser.assessors = isValidUser.assessors[0];
+      } else {
+        isValidUser.assessors = {};
+      }
+
+      // ✅ Convert iqas array → object
+      if (isValidUser.iqas?.length) {
+        isValidUser.iqas = isValidUser.iqas[0];
+      } else {
+        isValidUser.iqas = {};
+      }
+
       return {
         status: STATUS_CODES.SUCCESS,
         data: isValidUser,
@@ -807,6 +794,7 @@ class LearnerService {
       };
     }
   }
+
 
   // Delete Learner
   static async deleteLearner(
