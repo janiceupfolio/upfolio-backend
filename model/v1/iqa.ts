@@ -9,6 +9,9 @@ import UserQualification from "../../database/schema/user_qualification";
 import { emailService } from "../../helper/emailService";
 import Center from "../../database/schema/center";
 import AssessorIQA from "../../database/schema/assessor_iqa";
+import UserAssessor from "../../database/schema/user_assessor";
+import Units from "../../database/schema/units";
+import Category from "../../database/schema/category";
 const { sequelize } = require("../../configs/database");
 
 class IQAService {
@@ -498,6 +501,151 @@ class IQAService {
       };
     } catch (error) {
       console.error("getIQA Error:", error);
+      return {
+        status: STATUS_CODES.SERVER_ERROR,
+        message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
+
+  // Get Learner List
+  static async getLearnerList(iqa_id, userData, data) {
+    try {
+      // Verify IQA exists
+      const iqa = await User.findOne({
+        where: { id: iqa_id, role: Roles.IQA, deletedAt: null },
+        attributes: ["id"],
+      });
+
+      if (!iqa) {
+        return {
+          status: STATUS_CODES.NOT_FOUND,
+          message: "IQA not found",
+        };
+      }
+
+      // ✅ Get all assessor IDs under this IQA
+      const assessorIQAList = await AssessorIQA.findAll({
+        where: { iqa_id: iqa.id },
+        attributes: ["assessor_id"],
+      });
+      const assessorIds = assessorIQAList.map((item) => item.assessor_id);
+
+      if (!assessorIds.length) {
+        return {
+          status: STATUS_CODES.SUCCESS,
+          data: [],
+          message: "No assessors assigned to this IQA",
+        };
+      }
+
+      // ✅ Get all learner IDs assigned to those assessors
+      const learnerAssessorList = await UserAssessor.findAll({
+        where: { assessor_id: { [Op.in]: assessorIds } },
+        attributes: ["user_id", "assessor_id"],
+      });
+
+      const learnerIds = learnerAssessorList.map((item) => item.user_id);
+      if (!learnerIds.length) {
+        return {
+          status: STATUS_CODES.SUCCESS,
+          data: [],
+          message: "No learners found for this IQA",
+        };
+      }
+
+      // ✅ Fetch learners
+      const learnerData = await User.findAll({
+        where: { id: { [Op.in]: learnerIds }, role: Roles.LEARNER, deletedAt: null },
+        attributes: ["id", "name", "surname"],
+        raw: true,
+      });
+
+      // ✅ Prepare filter conditions for qualifications
+      const qualificationWhere: any = { user_id: { [Op.in]: learnerIds } };
+      if (data.is_signed_off !== undefined && data.is_signed_off !== null) {
+        qualificationWhere.is_signed_off = data.is_signed_off;
+      }
+
+      // ✅ Fetch all qualifications in one go (optimization)
+      const userQualifications = await UserQualification.findAll({
+        where: qualificationWhere,
+        attributes: [
+          "id",
+          "user_id",
+          "qualification_id",
+          "is_signed_off",
+          "is_optional_assigned",
+        ],
+        raw: true,
+      });
+
+      const qualificationIds = userQualifications.map((uq) => uq.qualification_id);
+
+      // ✅ Fetch all qualifications at once
+      const qualificationsData = await Qualifications.findAll({
+        where: { id: { [Op.in]: qualificationIds } },
+        attributes: ["id", "name", "qualification_no", "qualification_file"],
+        raw: true,
+      });
+
+      // Convert to map for faster lookup
+      const qualificationMap = {};
+      for (const q of qualificationsData) {
+        qualificationMap[q.id] = q;
+      }
+
+      // ✅ Fetch all assessors at once
+      const assessorIdsUnique = [
+        ...new Set(learnerAssessorList.map((ua) => ua.assessor_id)),
+      ];
+      const assessors = await User.findAll({
+        where: { id: { [Op.in]: assessorIdsUnique } },
+        attributes: ["id", "name", "surname"],
+        raw: true,
+      });
+
+      const assessorMap = {};
+      for (const a of assessors) {
+        assessorMap[a.id] = a;
+      }
+
+      // ✅ Build final response
+      const responseData = [];
+
+      for (const learner of learnerData) {
+        const uq = userQualifications.find((u) => u.user_id === learner.id);
+        if (!uq) continue; // filtered out if no qualification
+
+        const qualification = qualificationMap[uq.qualification_id] || {};
+        const userAssessor = learnerAssessorList.find(
+          (ua) => ua.user_id === learner.id
+        );
+        const assessor =
+          userAssessor && assessorMap[userAssessor.assessor_id]
+            ? assessorMap[userAssessor.assessor_id]
+            : {};
+
+        responseData.push({
+          id: learner.id,
+          name: learner.name,
+          surname: learner.surname,
+          qualifications: {
+            ...qualification,
+            is_signed_off: uq.is_signed_off ?? 0,
+            is_optional_assigned: uq.is_optional_assigned ?? 0,
+          },
+          assessors: assessor,
+        });
+      }
+
+      return {
+        status: STATUS_CODES.SUCCESS,
+        message: "Learner list fetched successfully",
+        data: responseData,
+      };
+    } catch (error) {
+      console.error("getLearnerList Error:", error);
       return {
         status: STATUS_CODES.SERVER_ERROR,
         message: STATUS_MESSAGE.ERROR_MESSAGE.INTERNAL_SERVER_ERROR,
