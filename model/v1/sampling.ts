@@ -26,6 +26,8 @@ import AssessmentUnits from "../../database/schema/assessment_units";
 import Qualifications from "../../database/schema/qualifications";
 import UserUnits from "../../database/schema/user_units";
 import Role from "../../database/schema/role";
+import UserAssessor from "../../database/schema/user_assessor";
+import AssessorIQA from "../../database/schema/assessor_iqa";
 const { sequelize } = require("../../configs/database");
 
 class SamplingService {
@@ -401,48 +403,94 @@ class SamplingService {
       let order: Order = [[sort_by, sort_order]];
       const fetchAll = limit === 0 || page === 0;
 
-      // Where condition
-      let whereCondition: any = {
-        deletedAt: null,
-        center_id: userData.center_id,
-      };
-      let sampling = await Sampling.findAndCountAll({
-        where: whereCondition,
+      // Login user is IQA
+      let iqaUser = await User.findOne({
+        where: { id: userData.id },
         include: [
           {
-            model: User,
-            as: "learner",
-            attributes: ["id", "name", "surname"],
+            model: Role,
+            as: "role_data",
+            required: true,
+            where: { role_slug: RoleSlug.IQA },
           },
-          // {
-          //   model: Units,
-          //   as: "units",
-          //   through: { attributes: [] },
-          // },
-          // {
-          //   model: Assessment,
-          //   as: "assessments",
-          //   through: { attributes: [] },
-          // },
-          // {
-          //   model: Image,
-          //   as: "images_sampling",
-          //   attributes: [
-          //     "id",
-          //     "image",
-          //     "image_type",
-          //     "image_name",
-          //     "image_size",
-          //   ],
-          // },
         ],
-        attributes: ["id", "sampling_type", "is_accept_sampling", "date"],
-        limit: fetchAll ? undefined : limit,
-        offset: fetchAll ? undefined : offset,
-        order,
-        distinct: true,
       });
-      sampling = JSON.parse(JSON.stringify(sampling));
+
+      let sampling
+      if (iqaUser) {
+        // Find All Learners under IQA
+        // ✅ Get all assessor IDs under this IQA
+        const assessorIQAList = await AssessorIQA.findAll({
+          where: { iqa_id: userData.id },
+          attributes: ["assessor_id"],
+        });
+        const assessorIds = assessorIQAList.map((item) => item.assessor_id);
+        if (!assessorIds.length) {
+          return {
+            status: STATUS_CODES.SUCCESS,
+            data: [],
+            message: "No assessors assigned to this IQA",
+          };
+        }
+        // ✅ Get all learner IDs assigned to those assessors
+        const learnerAssessorList = await UserAssessor.findAll({
+          where: { assessor_id: { [Op.in]: assessorIds } },
+          attributes: ["user_id", "assessor_id"],
+        });
+        const learnerIds = learnerAssessorList.map((item) => item.user_id);
+        if (!learnerIds.length) {
+          return {
+            status: STATUS_CODES.SUCCESS,
+            data: [],
+            message: "No learners found for this IQA",
+          };
+        }
+        // Where condition
+        let whereCondition: any = {
+          deletedAt: null,
+          center_id: userData.center_id,
+        };
+        sampling = await Sampling.findAndCountAll({
+          where: whereCondition,
+          include: [
+            {
+              model: User,
+              as: "learner",
+              attributes: ["id", "name", "surname"],
+              where: { id: { [Op.in]: learnerIds } },
+            },
+          ],
+          attributes: ["id", "sampling_type", "is_accept_sampling", "date"],
+          limit: fetchAll ? undefined : limit,
+          offset: fetchAll ? undefined : offset,
+          order,
+          distinct: true,
+        });
+        sampling = JSON.parse(JSON.stringify(sampling));
+      } else {
+        // Where condition
+        let whereCondition: any = {
+          deletedAt: null,
+          center_id: userData.center_id,
+        };
+        sampling = await Sampling.findAndCountAll({
+          where: whereCondition,
+          include: [
+            {
+              model: User,
+              as: "learner",
+              attributes: ["id", "name", "surname"],
+            },
+          ],
+          attributes: ["id", "sampling_type", "is_accept_sampling", "date"],
+          limit: fetchAll ? undefined : limit,
+          offset: fetchAll ? undefined : offset,
+          order,
+          distinct: true,
+        });
+        sampling = JSON.parse(JSON.stringify(sampling));
+      }
+
       const pagination = await paginate(sampling, limit, page, fetchAll);
       const response = {
         data: sampling.rows,
