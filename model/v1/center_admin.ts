@@ -1,5 +1,5 @@
 require("dotenv").config();
-import { Roles, STATUS_CODES, STATUS_MESSAGE } from "../../configs/constants";
+import { Roles, RoleSlug, STATUS_CODES, STATUS_MESSAGE } from "../../configs/constants";
 import { col, fn, Op, Order, Sequelize, where } from "sequelize";
 import { paginate, generateSecurePassword, centerId } from "../../helper/utils";
 import { emailService } from "../../helper/emailService";
@@ -8,6 +8,7 @@ import Qualifications from "../../database/schema/qualifications";
 import UserQualification from "../../database/schema/user_qualification";
 import Center from "../../database/schema/center";
 import { userAuthenticationData } from "../../interface/user";
+import Role from "../../database/schema/role";
 const { sequelize } = require("../../configs/database");
 
 class CenterAdminService {
@@ -132,7 +133,7 @@ class CenterAdminService {
       await transaction.commit();
       return {
         status: STATUS_CODES.SUCCESS,
-        data: centerAdmin,
+        data: {},
         message: "Center admin updated successfully",
       };
     } catch (error) {
@@ -159,8 +160,11 @@ class CenterAdminService {
         };
       }
       // check if center admin is last admin of the center if yes then return error
+      let roleId = await Role.findOne({
+        where: { role_slug: RoleSlug.ADMIN },
+      })
       let centerAdmins = await User.findAll({
-        where: { center_id: centerAdmin.center_id, deletedAt: null },
+        where: { center_id: centerAdmin.center_id, deletedAt: null, role: roleId?.id },
         attributes: ["id"],
       });
       if (centerAdmins.length === 1) {
@@ -196,8 +200,11 @@ class CenterAdminService {
     userData: userAuthenticationData
   ): Promise<any> {
     try {
+      let roleId = await Role.findOne({
+        where: { role_slug: RoleSlug.ADMIN },
+      })
       let centerAdmins = await User.findAll({
-        where: { center_id: data.center_id, deletedAt: null },
+        where: { center_id: data.center_id, deletedAt: null, role: roleId?.id },
         // include: [
         //   {
         //     model: Center,
