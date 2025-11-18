@@ -92,7 +92,7 @@ class SamplingService {
               iqa_id: isIQA.id,
               sampled_at: new Date().toISOString(),
             },
-            { where: { unit_id: unitId } }
+            { where: { unit_id: unitId, user_id: data.learner_id } }
           );
         }
       }
@@ -124,7 +124,7 @@ class SamplingService {
             iqa_id: isIQA.id,
             sampled_at: new Date().toISOString(),
           },
-          { where: { unit_id: { [Op.in]: unitIds } } }
+          { where: { unit_id: { [Op.in]: unitIds }, user_id: data.learner_id } }
         );
         for (const assessmentId of assessmentIds) {
           await SamplingAssessments.create(
