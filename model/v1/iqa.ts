@@ -566,6 +566,9 @@ class IQAService {
       if (data.is_signed_off !== undefined && data.is_signed_off !== null) {
         qualificationWhere.is_signed_off = data.is_signed_off;
       }
+      if (data.is_optional_assigned !== undefined && data.is_optional_assigned !== null) {
+        qualificationWhere.is_optional_assigned = data.is_optional_assigned;
+      }
 
       // ✅ Fetch all qualifications in one go (optimization)
       const userQualifications = await UserQualification.findAll({
