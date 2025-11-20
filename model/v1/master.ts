@@ -120,7 +120,7 @@ class MasterService {
         };
       }
       await userQualification.update({ is_signed_off: data.is_sign_off });
-      let learner_ = await User.findOne({
+      let learner_: any = await User.findOne({
         where: { id: data.learner_id, deletedAt: null },
         include: [
           {
@@ -135,12 +135,12 @@ class MasterService {
             required: false,
             through: { attributes: [] },
           },
-          {
-            model: User,
-            as: "iqas",
-            required: false,
-            through: { attributes: [] },
-          },
+          // {
+          //   model: User,
+          //   as: "iqas",
+          //   required: false,
+          //   through: { attributes: [] },
+          // },
           {
             model: Center,
             as: "center",
@@ -149,24 +149,39 @@ class MasterService {
           },
         ],
       });
-      learner_ = JSON.parse(JSON.stringify(learner_));
-      //@ts-ignore
-      if (learner_ && learner_.qualifications?.length) {
-        //@ts-ignore
-        learner_.qualifications = await Promise.all(
-          //@ts-ignore
-          learner_.qualifications.map(async (q: any) => {
-            const { tbl_user_qualification, UserQualification, ...rest } = q; // strip join table objects
-            return {
-              ...rest,
-              is_signed_off:
-                tbl_user_qualification?.is_signed_off ??
-                UserQualification?.is_signed_off ??
-                null,
-            };
-          })
-        );
+      learner_ = JSON.parse(JSON.stringify(learner_ || {}));
+      // ✅ Flatten qualification array → object
+      if (learner_.qualifications?.length) {
+        const q = learner_.qualifications[0];
+        const { tbl_user_qualification, UserQualification, ...rest } = q;
+        learner_.qualifications = {
+          ...rest,
+          is_signed_off:
+            tbl_user_qualification?.is_signed_off ??
+            UserQualification?.is_signed_off ??
+            null,
+          is_optional_assigned:
+            tbl_user_qualification?.is_optional_assigned ??
+            UserQualification?.is_optional_assigned ??
+            null,
+        };
+      } else {
+        learner_.qualifications = {};
       }
+
+      // ✅ Flatten assessor array → object
+      if (learner_.assessors?.length) {
+        learner_.assessors = learner_.assessors[0];
+      } else {
+        learner_.assessors = {};
+      }
+
+      // ✅ Flatten IQA array → object
+      // if (learner_.iqas?.length) {
+      //   learner_.iqas = learner_.iqas[0];
+      // } else {
+      //   learner_.iqas = {};
+      // }
       return {
         status: STATUS_CODES.SUCCESS,
         data: learner_,
@@ -1886,7 +1901,7 @@ class MasterService {
           });
 
           const learnerIds = supervisedLearners.map((ui) => ui.user_id);
-          
+
           // Include both IQA's activities and supervised learners' activities
           const userIdsForActivity = [iqaId, ...learnerIds];
 
@@ -2033,7 +2048,7 @@ class MasterService {
         const monthData = (monthlyApproveRejectData as any[]).find(
           (m) => m.month === monthKey
         ) as any;
-        
+
         monthlyOverview.push({
           month: monthNames[date.getMonth()],
           approved: monthData ? Number(monthData.approved) : 0,
@@ -2086,7 +2101,7 @@ class MasterService {
   // Contact Us
   static async contactUs(data): Promise<any> {
     try {
-      let isValidEmail_ = await isValidEmail(data.email) 
+      let isValidEmail_ = await isValidEmail(data.email)
       if (!isValidEmail_) {
         return {
           status: STATUS_CODES.CONFLICT,

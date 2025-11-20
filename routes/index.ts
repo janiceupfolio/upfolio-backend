@@ -8,13 +8,15 @@ import assessor from "./v1/assessor"
 import learner from "./v1/learner"
 import IQA from "./v1/iqa";
 import EQA from "./v1/eqa";
-import Admin from "./v1/admin";
+import Center from "./v1/admin";
 import masterRoute from "./v1/master";
 import assessment from "./v1/assessment";
 import requestQualification from "./v1/request_qualification";
 import chunkUpload from "./v1/chunk_upload";
 import moduleRecords from "./v1/modules_records"
 import samplingModule from "./v1/sampling"
+import reportsRoute from "./v1/reports"
+import Admin from "./v1/center_admin";
 
 dotenv.config();
 
@@ -76,6 +78,13 @@ export default (app: Application): void => {
     EQA
   );
 
+  // Center Routes
+  app.use(
+    "/" + process.env.API_BASE_URL + "/v1/center",
+    upload.single("file"),
+    Center
+  );
+
   // Admin Routes
   app.use(
     "/" + process.env.API_BASE_URL + "/v1/admin",
@@ -124,5 +133,11 @@ export default (app: Application): void => {
     "/" + process.env.API_BASE_URL + "/v1/sampling",
     upload.array("files"),
     samplingModule
+  )
+
+  // Report Routes
+  app.use(
+    "/" + process.env.API_BASE_URL + "/v1/reports",
+    reportsRoute
   )
 };

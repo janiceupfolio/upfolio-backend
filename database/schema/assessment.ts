@@ -30,6 +30,8 @@ class Assessment
   public assessment_status!: number;
   public feedback!: string;
   public is_sampling!: boolean;
+  public iqa_id!: number;
+  public sampled_at!: string;
   // timestamps!
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -84,7 +86,15 @@ Assessment.init(
     is_sampling: {
       type: DataTypes.BOOLEAN,
       defaultValue: false
-    }
+    },
+    iqa_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    sampled_at: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   },
   {
     ...BaseModel.initBaseOptions(sequelize),

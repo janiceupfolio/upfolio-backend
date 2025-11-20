@@ -11,6 +11,8 @@ export interface AssessmentInterface {
   assessment_status: number;
   feedback: string;
   is_sampling: boolean;
+  iqa_id?: number;
+  sampled_at?: string;
   createdAt?: Date;
   updatedAt?: Date;
   deletedAt?: Date;
