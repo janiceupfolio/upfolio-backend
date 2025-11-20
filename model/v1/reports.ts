@@ -52,13 +52,22 @@ class ReportsService {
         (lq) => lq.qualification_id
       );
 
+      let learnerWhere: any = {
+        id: { [Op.in]: finalLearnerIds },
+        role: Roles.LEARNER,
+        deletedAt: null,
+      };
+
+      if (data.learner_name_search) {
+        learnerWhere[Op.or] = [
+          { name: { [Op.like]: `%${data.learner_name_search}%` } },
+          { surname: { [Op.like]: `%${data.learner_name_search}%` } },
+        ];
+      }
+
       // --- fetch learners
       const learners = await User.findAll({
-        where: {
-          id: { [Op.in]: finalLearnerIds },
-          role: Roles.LEARNER,
-          deletedAt: null,
-        },
+        where: learnerWhere,
         attributes: ["id", "name", "surname"],
       });
 
