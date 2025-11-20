@@ -211,10 +211,13 @@ class CenterAdminService {
         where: { role_slug: RoleSlug.ADMIN },
       })
 
+      let centerData = await Center.findById(data.center_id);
+
       let whereCondition: any = {
         center_id: data.center_id,
         deletedAt: null,
-        role: roleId?.id
+        role: roleId?.id,
+        id: { [Op.ne]: centerData.center_admin}
       };
       
       let search = data?.search || "";
@@ -235,14 +238,14 @@ class CenterAdminService {
           ...whereCondition,
           ...searchOptions
         },
-        // include: [
-        //   {
-        //     model: Center,
-        //     as: "center",
-        //     required: true,
-        //     attributes: ["id", "center_name", "center_address"],
-        //   },
-        // ],
+        include: [
+          {
+            model: Center,
+            as: "center",
+            required: true,
+            attributes: ["id", "center_name", "center_address"],
+          },
+        ],
         limit: fetchAll ? undefined : limit,
         offset: fetchAll ? undefined : offset,
         order,

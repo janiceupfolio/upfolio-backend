@@ -270,60 +270,42 @@ class AdminService {
       let order: Order = [[sort_by, sort_order]];
       const fetchAll = limit === 0 || page === 0;
 
+      let whereCondition: any = {
+        deletedAt: null,
+      };
+
       let search = data?.search || "";
-
-      // Where condition
-      let whereCondition: any = { deletedAt: null, role: Roles.ADMIN };
-
-      // Search options for user fields and related center
       let searchOptions = {};
       if (search) {
         searchOptions = {
           [Op.or]: [
-            { name: { [Op.like]: `%${search}%` } },
-            { surname: { [Op.like]: `%${search}%` } },
-            { email: { [Op.like]: `%${search}%` } },
-            Sequelize.literal(`CONCAT(User.name, ' ', User.surname) LIKE '%${search}%'`),
-            { '$center.center_name$': { [Op.like]: `%${search}%` } }
-          ]
+            where(
+              fn("LOWER", col("center_name")),
+              {
+                [Op.like]: `%${search.trim().toLowerCase()}%`,
+              }
+            ),
+          ],
         };
       }
 
-      let userData_ = await User.findAndCountAll({
+      let centerData = await Center.findAndCountAll({
         where: {
           ...whereCondition,
           ...searchOptions
         },
-        include: [
-          {
-            model: Qualifications,
-            as: "qualifications",
-            through: { attributes: [] }, // prevent including join table info
-          },
-          {
-            model: Center,
-            as: "center",
-            required: true,
-            attributes: ["id", "center_name", "center_address"],
-          },
-        ],
-        limit: fetchAll ? undefined : limit,
-        offset: fetchAll ? undefined : offset,
-        order,
-        distinct: true,
-      });
-      userData_ = JSON.parse(JSON.stringify(userData_));
-      const pagination = await paginate(userData_, limit, page, fetchAll);
+      })
+      centerData = JSON.parse(JSON.stringify(centerData));
+      for (const center of centerData.rows) {
+        let centerAdmin = await User.findOne({
+          where: { id: center.center_admin, deletedAt: null },
+        });
+        (center as any).center_admin_data = centerAdmin;
+      }
+      const pagination = await paginate(centerData, limit, page, fetchAll);
       const response = {
-        data: userData_.rows,
+        data: centerData.rows,
         pagination: pagination,
-        // center_data: center_data
-        //   ? {
-        //       id: center_data.id,
-        //       center_name: center_data.center_name,
-        //       center_address: center_data.center_address,
-        //     }
-        //   : {},
       };
       return {
         status: STATUS_CODES.SUCCESS,
