@@ -200,23 +200,75 @@ class CenterAdminService {
     userData: userAuthenticationData
   ): Promise<any> {
     try {
+      const limit = data?.limit ? +data.limit : 0;
+      const page = data?.page ? +data.page : 0;
+      let offset = (page - 1) * limit;
+      let sort_by = data?.sort_by || "createdAt";
+      let sort_order = data?.sort_order || "DESC";
+      let order: Order = [[sort_by, sort_order]];
+      const fetchAll = limit === 0 || page === 0;
       let roleId = await Role.findOne({
         where: { role_slug: RoleSlug.ADMIN },
       })
-      let centerAdmins = await User.findAll({
-        where: { center_id: data.center_id, deletedAt: null, role: roleId?.id },
-        // include: [
-        //   {
-        //     model: Center,
-        //     as: "center",
-        //     required: true,
-        //     attributes: ["id", "center_name", "center_address"],
-        //   },
-        // ],
+
+      let centerData = await Center.findById(data.center_id);
+
+      let whereCondition: any = {
+        center_id: data.center_id,
+        deletedAt: null,
+        role: roleId?.id,
+        // id: { [Op.ne]: centerData.center_admin}
+      };
+      
+      let search = data?.search || "";
+      let searchOptions = {};
+      if (search) {
+        searchOptions = {
+          [Op.or]: [
+            { name: { [Op.like]: `%${search}%` } },
+            { surname: { [Op.like]: `%${search}%` } },
+            { email: { [Op.like]: `%${search}%` } },
+            Sequelize.literal(`CONCAT(User.name, ' ', User.surname) LIKE '%${search}%'`),
+          ]
+        };
+      }
+
+      let centerAdmins = await User.findAndCountAll({
+        where: {
+          ...whereCondition,
+          ...searchOptions
+        },
+        include: [
+          {
+            model: Center,
+            as: "center",
+            required: true,
+            attributes: ["id", "center_name", "center_address"],
+          },
+        ],
+        limit: fetchAll ? undefined : limit,
+        offset: fetchAll ? undefined : offset,
+        order,
+        distinct: true,
       });
+      centerAdmins = JSON.parse(JSON.stringify(centerAdmins));
+
+      for (const centerAdmin of centerAdmins.rows) {
+        if (centerAdmin.id === centerData.center_admin) {
+          (centerAdmin as any).is_primary_admin = true;
+        } else {
+          (centerAdmin as any).is_primary_admin = false;
+        }
+      }
+
+      const pagination = await paginate(centerAdmins, limit, page, fetchAll);
+      const response = {
+        data: centerAdmins.rows,
+        pagination: pagination,
+      };
       return {
         status: STATUS_CODES.SUCCESS,
-        data: centerAdmins,
+        data: response,
         message: "Center admins fetched successfully",
       };
     } catch (error) {
