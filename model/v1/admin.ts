@@ -299,7 +299,18 @@ class AdminService {
       for (const center of centerData.rows) {
         let centerAdmin = await User.findOne({
           where: { id: center.center_admin, deletedAt: null },
+          attributes: ["id", "name", "surname", "email", "center_id", "phone_number", "phone_code"],
         });
+        let userQualification = await UserQualification.findAll({
+          where: { user_id: centerAdmin.id },
+          attributes: ["qualification_id"],
+        });
+        let qualificationIds = userQualification.map((q) => q.qualification_id);
+        let qualifications_ = await Qualifications.findAll({
+          where: { id: qualificationIds },
+        });
+        qualifications_ = JSON.parse(JSON.stringify(qualifications_));
+        (center as any).qualifications = qualifications_;
         (center as any).center_admin_data = centerAdmin;
       }
       const pagination = await paginate(centerData, limit, page, fetchAll);
