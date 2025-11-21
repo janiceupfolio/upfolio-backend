@@ -12,7 +12,10 @@ class ReportsController {
     try {
       let userData = req.headers["user_info"] as userAuthenticationData;
       let data = req.query;
-      let request = await ReportsService.getIqaSamplingMatrixReport(data, userData);
+      let request = await ReportsService.getIqaSamplingMatrixReport(
+        data,
+        userData
+      );
       if (request.status !== STATUS_CODES.SUCCESS) {
         res.handler.errorResponse(request.status, request.message);
         return;

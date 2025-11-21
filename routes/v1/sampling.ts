@@ -32,4 +32,9 @@ router
   .route("/list")
   .get(authenticateUser, SamplingController.listSampling);
 
+// Sampling Matrix by Qualification route
+router
+  .route("/sampling-matrix-by-qualification")
+  .get(authenticateUser, SamplingController.getSamplingMatrixByQualification);
+
 export default router;

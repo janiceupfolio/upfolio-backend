@@ -217,7 +217,7 @@ class CenterAdminService {
         center_id: data.center_id,
         deletedAt: null,
         role: roleId?.id,
-        id: { [Op.ne]: centerData.center_admin}
+        // id: { [Op.ne]: centerData.center_admin}
       };
       
       let search = data?.search || "";
@@ -252,6 +252,15 @@ class CenterAdminService {
         distinct: true,
       });
       centerAdmins = JSON.parse(JSON.stringify(centerAdmins));
+
+      for (const centerAdmin of centerAdmins.rows) {
+        if (centerAdmin.id === centerData.center_admin) {
+          (centerAdmin as any).is_primary_admin = true;
+        } else {
+          (centerAdmin as any).is_primary_admin = false;
+        }
+      }
+
       const pagination = await paginate(centerAdmins, limit, page, fetchAll);
       const response = {
         data: centerAdmins.rows,
