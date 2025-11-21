@@ -252,6 +252,15 @@ class AssessorService {
         center_data = await Center.findById(center_id);
       }
 
+      if (data.iqa_id) {
+        const assessorIQAList = await AssessorIQA.findAll({
+          where: { iqa_id: data.iqa_id },
+          attributes: ["assessor_id"],
+        });
+        const assessorIds = assessorIQAList.map((item) => item.assessor_id);
+        whereCondition.id = { [Op.in]: assessorIds };
+      }
+
       // Qualification Management
       let qualificationRequired = false;
       let qualificationWhereCondition: any = {
