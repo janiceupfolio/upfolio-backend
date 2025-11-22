@@ -14,6 +14,7 @@ import UserUnits from "../../database/schema/user_units";
 import Units from "../../database/schema/units";
 import Category from "../../database/schema/category";
 import qualificationService from "./qualifications";
+import AssessorIQA from "../../database/schema/assessor_iqa";
 const { sequelize } = require("../../configs/database");
 
 class LearnerService {
@@ -544,6 +545,20 @@ class LearnerService {
         center_data = await Center.findById(center_id);
       }
 
+      if (data.iqa_id) {
+        const assessorIQAList = await AssessorIQA.findAll({
+          where: { iqa_id: data.iqa_id },
+          attributes: ["assessor_id"],
+        });
+        const assessorIds = assessorIQAList.map((item) => item.assessor_id);
+        const learnerAssessorList = await UserAssessor.findAll({
+          where: { assessor_id: { [Op.in]: assessorIds } },
+          attributes: ["user_id", "assessor_id"],
+        });
+        const learnerIds = learnerAssessorList.map((item) => item.user_id);
+        whereCondition.id = { [Op.in]: learnerIds };
+      }
+
       let whereConditionQualification: any = { deletedAt: null };
       let qualificationRequired = false;
 
@@ -617,12 +632,16 @@ class LearnerService {
       ];
 
       if (isAssessor) {
+        let assessor_id = data.assessor_id ? data.assessor_id : userData.id;
         whereCondition.id = {
           [Op.in]: Sequelize.literal(`(
-          SELECT user_id FROM tbl_user_assessor WHERE assessor_id = ${userData.id}
+          SELECT user_id FROM tbl_user_assessor WHERE assessor_id = ${assessor_id}
         )`),
         };
       } else {
+        let assessor_id = data.assessor_id ? data.assessor_id : null;
+        whereConditionInclude.id = assessor_id;
+        includeRequiredAssessor = assessor_id ? true : false;
         include.push({
           model: User,
           as: "assessors",

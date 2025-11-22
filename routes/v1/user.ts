@@ -61,4 +61,40 @@ router
     userAuthController.loginUsingUserId
   );
 
+// Forgot Password route
+router
+  .route("/forgot-password")
+  .post(
+    validate([
+      body("email")
+        .trim()
+        .notEmpty()
+        .withMessage(STATUS_MESSAGE.USER.ERROR_MESSAGE.EMAIL_REQUIRED)
+        .custom((value) => {
+          if (!validateEmail(value)) {
+            throw new Error(STATUS_MESSAGE.USER.ERROR_MESSAGE.INVALID_EMAIL);
+          }
+          return true;
+        }),
+    ]),
+    userAuthController.forgotPassword
+  );
+
+// Reset Password route
+router
+  .route("/reset-password")
+  .post(
+    validate([
+      body("token")
+        .trim()
+        .notEmpty()
+        .withMessage(STATUS_MESSAGE.USER.ERROR_MESSAGE.TOKEN_REQUIRED),
+      body("new_password")
+        .trim()
+        .notEmpty()
+        .withMessage(STATUS_MESSAGE.USER.ERROR_MESSAGE.NEW_PASSWORD_REQUIRED),
+    ]),
+    userAuthController.resetPassword
+  );
+
 export default router;

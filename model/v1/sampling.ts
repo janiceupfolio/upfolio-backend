@@ -419,11 +419,19 @@ class SamplingService {
       });
 
       let sampling;
-      if (iqaUser) {
+      if (iqaUser || data.is_iqa) {
+        let iqaId = data.is_iqa ? data.is_iqa : userData.id;
         // Find All Learners under IQA
         // ✅ Get all assessor IDs under this IQA
+        let assessorWhereCondition = {
+          deletedAt: null,
+          iqa_id: iqaId,
+        }
+        if (data.assessor_id) {
+          assessorWhereCondition['assessor_id'] = data.assessor_id;
+        }
         const assessorIQAList = await AssessorIQA.findAll({
-          where: { iqa_id: userData.id },
+          where: assessorWhereCondition,
           attributes: ["assessor_id"],
         });
         const assessorIds = assessorIQAList.map((item) => item.assessor_id);
@@ -447,10 +455,11 @@ class SamplingService {
             message: "No learners found for this IQA",
           };
         }
+        let centerId = data.center_id ? data.center_id : userData.center_id;
         // Where condition
         let whereCondition: any = {
           deletedAt: null,
-          center_id: userData.center_id,
+          center_id: centerId,
         };
         sampling = await Sampling.findAndCountAll({
           where: whereCondition,
@@ -475,12 +484,24 @@ class SamplingService {
           deletedAt: null,
           center_id: userData.center_id,
         };
+        let includeWhereCondition: any = {};
+        if (data.assessor_id) {
+          let learnerAssessorList = await UserAssessor.findAll({
+            where: { assessor_id: data.assessor_id },
+            attributes: ["user_id"],
+          });
+          const learnerIds = learnerAssessorList.map((item) => item.user_id);
+          if (learnerIds.length) {
+            includeWhereCondition.id = { [Op.in]: learnerIds };
+          }
+        }
         sampling = await Sampling.findAndCountAll({
           where: whereCondition,
           include: [
             {
               model: User,
               as: "learner",
+              where: includeWhereCondition,
               attributes: ["id", "name", "surname"],
             },
           ],

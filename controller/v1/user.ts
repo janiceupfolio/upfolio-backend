@@ -101,6 +101,46 @@ class userAuthController {
       res.handler.serverError(error);
     }
   }
+
+  // Forgot Password method
+  static async forgotPassword(req: Request, res: Response): Promise<void> {
+    try {
+      let data = req.body;
+      let request = await userAuthService.forgotPassword(data);
+      if (request.status !== STATUS_CODES.SUCCESS) {
+        res.handler.errorResponse(request.status, request.message);
+        return;
+      }
+      res.handler.successResponse(
+        request.status,
+        request.data,
+        request.message
+      );
+    } catch (error) {
+      error = "server error";
+      res.handler.serverError(error);
+    }
+  }
+
+  // Reset Password method
+  static async resetPassword(req: Request, res: Response): Promise<void> {
+    try {
+      let data: UserInterface = req.body;
+      let request = await userAuthService.resetPassword(data);
+      if (request.status !== STATUS_CODES.SUCCESS) {
+        res.handler.errorResponse(request.status, request.message);
+        return;
+      }
+      res.handler.successResponse(
+        request.status,
+        request.data,
+        request.message
+      );
+    } catch (error) {
+      error = "server error";
+      res.handler.serverError(error);
+    }
+  }
 }
 
 export default userAuthController;

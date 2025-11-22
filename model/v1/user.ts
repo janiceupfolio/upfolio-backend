@@ -14,6 +14,7 @@ import Center from "../../database/schema/center";
 import Role from "../../database/schema/role";
 import UserQualification from "../../database/schema/user_qualification";
 import { Op } from "sequelize";
+import { emailService, EmailService } from "../../helper/emailService";
 const jwtSecret = process.env.JWT_SECRET || "";
 const AccessTokenExpiration = process.env.ACCESS_TOKEN_EXPIRATION || "";
 
@@ -267,6 +268,72 @@ class userAuthService {
       status: STATUS_CODES.SUCCESS,
       data: user.data,
       message: "User Login Successfully",
+    };
+  }
+
+  // Forgot Password
+  static async forgotPassword(data: any): Promise<AuthResponse> {
+    // check is valid customer
+    let isUser = await User.findOne({
+      where: {
+        email: data.email,
+        deletedAt: null,
+      },
+    });
+    if (!isUser) {
+      return {
+        status: STATUS_CODES.NOT_FOUND,
+        message: STATUS_MESSAGE.USER.ERROR_MESSAGE.USER_NOT_FOUND,
+      };
+    }
+    // Generate JWT token for password reset
+    const resetToken = await jwt.sign({ id: isUser.id }, jwtSecret, {
+      expiresIn: '1h', // Token valid for 1 hour
+    });
+    // Here, you would typically send the resetToken to the user's email address.
+    await emailService.sendPasswordResetEmail(
+      isUser.name,
+      isUser.email,
+      `https://www.upfolioplus.co.uk/reset-password?token=${resetToken}`
+    );
+    // For this implementation, we'll just return the token in the response.
+    return {
+      status: STATUS_CODES.SUCCESS,
+      data: {},
+      message: "Password reset link has been sent to your email address",
+    };
+  }
+
+  // Reset Password
+  static async resetPassword(data: any): Promise<AuthResponse> {
+    // Decode jwt token
+    let decoded;
+    try {
+      decoded = jwt.verify(data.token || "", jwtSecret);
+    } catch (error) {
+      return {
+        status: STATUS_CODES.UNAUTHORIZED,
+        message: "The password reset link has expired. Please request a new one.",
+      };
+    }
+    // check if user exist
+    let isUser = await User.findOne({
+      where: { id: decoded.id },
+    });
+    if (!isUser) {
+      return {
+        status: STATUS_CODES.NOT_FOUND,
+        message: STATUS_MESSAGE.USER.ERROR_MESSAGE.USER_NOT_FOUND,
+      };
+    }
+    // Update password
+    await User.update(
+      { password: data.new_password },
+      { where: { id: isUser.id } }
+    );
+    return {
+      status: STATUS_CODES.SUCCESS,
+      message: "Password has been reset successfully",
     };
   }
 }
