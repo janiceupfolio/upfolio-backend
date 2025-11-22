@@ -101,6 +101,9 @@ export const STATUS_MESSAGE = {
       OTP_REQUIRED: "OTP required",
       INVALID_OTP: "Invalid OTP",
       ALREADY_SUBSCRIBED: "Newsletter already subscribed",
+      INVALID_EMAIL: "Invalid email address",
+      TOKEN_REQUIRED: "Token required",
+      NEW_PASSWORD_REQUIRED: "New password required",
     }
   },
   CUSTOMER_ADDRESS: {

@@ -226,6 +226,27 @@ export class EmailService {
   }
 
   /**
+   * Send Password Reset Email
+   */
+  async sendPasswordResetEmail(
+    name: string,
+    email: string,
+    resetUrl: string
+  ): Promise<boolean> {
+    const data: EmailTemplateData = {
+      name,
+      email,
+      reset_url: resetUrl
+    }
+    return this.sendTemplateEmail(
+      email,
+      "Password Reset Request",
+      "password-reset",
+      data
+    );
+  }
+
+  /**
    * Send Contact US Email Admin
    */
   async sendContactUsAdminEmail(
