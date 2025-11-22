@@ -632,12 +632,16 @@ class LearnerService {
       ];
 
       if (isAssessor) {
+        let assessor_id = data.assessor_id ? data.assessor_id : userData.id;
         whereCondition.id = {
           [Op.in]: Sequelize.literal(`(
-          SELECT user_id FROM tbl_user_assessor WHERE assessor_id = ${userData.id}
+          SELECT user_id FROM tbl_user_assessor WHERE assessor_id = ${assessor_id}
         )`),
         };
       } else {
+        let assessor_id = data.assessor_id ? data.assessor_id : null;
+        whereConditionInclude.id = assessor_id;
+        includeRequiredAssessor = assessor_id ? true : false;
         include.push({
           model: User,
           as: "assessors",
